@@ -14,7 +14,7 @@ SentenceTransformer = None
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 app = Flask(__name__)
 CORS(app)
@@ -27,9 +27,12 @@ SUPABASE_URL     = os.getenv("SUPABASE_URL",     "")
 SUPABASE_ANON    = os.getenv("SUPABASE_ANON_KEY","")
 LLM_PROVIDER     = os.getenv("LLM_PROVIDER", "gemini")
 
+if not GEMINI_API_KEY and not GROQ_API_KEY:
+    print("⚠️  WARNING: No LLM API Key found. AI features will fail.")
+
 # ── CLIENTS ───────────────────────────────────────────────────────────────────
 print("⏳ Loading sentence-transformer embedding model...")
-# Mock classes for bypass
+# Mock classes for bypass (Python 3.14 compatibility)
 class MockEmbedder:
     def encode(self, text):
         class Result:
@@ -76,10 +79,10 @@ def embed_text(text: str) -> list:
     return embedder.encode(text).tolist()
 
 def call_gemini(prompt: str) -> str:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 8192}
     }
     try:
         res = requests.post(url, json=payload, timeout=30)
@@ -105,14 +108,15 @@ def call_llm(prompt: str) -> str:
 
 def parse_llm_json(raw: str) -> dict:
     """Safely parse JSON from LLM response, stripping markdown fences."""
+    import re
     clean = raw.strip()
-    if clean.startswith("```"):
-        parts = clean.split("```")
-        clean = parts[1] if len(parts) > 1 else clean
-        if clean.startswith("json"):
-            clean = clean[4:]
+    # Use regex to find the first JSON block: ```json ... ``` or just ``` ... ```
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", clean)
+    if match:
+        clean = match.group(1)
+    
     try:
-        return json.loads(clean.strip())
+        return json.loads(clean)
     except json.JSONDecodeError:
         return {"error": "parse_failed", "raw": raw}
 
@@ -320,8 +324,10 @@ def analyze_draft():
 
     if not draft or len(draft) < 10:
         return jsonify({"error": "Draft too short"}), 400
+    
+    # 🚨 NEW: Check if DB is empty and return a clear error
     if collection.count() == 0:
-        return jsonify({"error": "DB empty. Seed first."}), 400
+        return jsonify({"error": "Memory is empty. Please run the Seed API first to load historical posts."}), 400
 
     start = time.time()
 
@@ -385,6 +391,10 @@ Return ONLY valid JSON:
 
     raw = call_llm(prompt)
     analysis = parse_llm_json(raw)
+
+    # 🚨 NEW: Catch LLM errors
+    if "error" in analysis:
+        return jsonify({"success": False, "error": f"LLM Scoring Failed: {analysis.get('raw', 'Unknown error')}"}), 500
 
     return jsonify({
         "success": True, "draft": draft, "analysis": analysis,
