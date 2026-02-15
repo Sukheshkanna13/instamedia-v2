@@ -1,6 +1,9 @@
 # InstaMedia AI v2 — Emotional Signal Engine
 ### TypeScript + Supabase + 4-Module Architecture
 
+Insta Media AI is built on an Orchestrator-Worker Multi-Agent Architecture that coordinates specialized AI agents to deliver autonomous marketing operations. The system leverages AWS serverless infrastructure for scalability and cost-efficiency, with Amazon Bedrock providing the foundation for AI-powered content generation and decision-making.
+
+The architecture follows event-driven patterns where the Orchestrator acts as the central coordinator, delegating tasks to specialized agents (Intelligence Gatherer, Creative Suite, Distribution Engine, and Analyst Agent) that operate independently but maintain state coherence through DynamoDB. This design enables parallel processing, fault isolation, and independent scaling of each agent based on workload.
 ```
 Frontend: React + TypeScript + Vite (no external UI library)
 Backend:  Python Flask + ChromaDB + sentence-transformers
