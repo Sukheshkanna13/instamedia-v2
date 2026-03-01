@@ -2,12 +2,13 @@ import { useState } from "react";
 import type { Tab, ContentIdea } from "./types";
 import Overview       from "./components/modules/Overview";
 import BrandDNA       from "./components/modules/BrandDNA";
-import Ideation       from "./components/modules/Ideation";
+import IdeationEnhanced from "./components/modules/IdeationEnhanced";
 import CreativeStudio from "./components/modules/CreativeStudio";
 import Calendar       from "./components/modules/Calendar";
 import Connections    from "./components/modules/Connections";
 import BrandDrift     from "./components/modules/BrandDrift";
 import ColdStart      from "./components/modules/ColdStart";
+import DatabaseExpansion from "./components/modules/DatabaseExpansion";
 
 // ── Sidebar nav config ────────────────────────────────────────────────────────
 const NAV = [
@@ -31,6 +32,7 @@ const NAV = [
   },
   { section: "Intelligence",
     items: [
+      { id: "database"  as Tab, label: "Database",        icon: "🗄️" },
       { id: "drift"     as Tab, label: "Brand Drift",     icon: "📊" },
       { id: "coldstart" as Tab, label: "Cold Start",      icon: "🎯" },
     ]
@@ -45,6 +47,7 @@ const PAGE_TITLE: Record<Tab, string> = {
   calendar: "Calendar",
   library:  "Post Library",
   connections: "Platform Connections",
+  database: "Database Expansion",
   drift:    "Brand Drift Detection",
   coldstart: "Cold Start Bootstrap",
 };
@@ -63,10 +66,11 @@ export default function App() {
     switch (tab) {
       case "overview":    return <Overview />;
       case "dna":         return <BrandDNA />;
-      case "ideation":    return <Ideation onSelectIdea={handleIdeaSelect} />;
+      case "ideation":    return <IdeationEnhanced onSelectIdea={handleIdeaSelect} />;
       case "studio":      return <CreativeStudio selectedIdea={selectedIdea} />;
       case "calendar":    return <Calendar />;
       case "connections": return <Connections />;
+      case "database":    return <DatabaseExpansion />;
       case "drift":       return <BrandDrift />;
       case "coldstart":   return <ColdStart onSelect={(id) => {
         console.log("Bootstrapped with archetype:", id);

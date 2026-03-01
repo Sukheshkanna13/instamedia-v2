@@ -168,4 +168,47 @@ export const api = {
   getERSStats: () => get<ERSStats>("/api/stats"),
 
   getPosts: () => get<{ posts: Array<{ text: string; ers: number; likes: number; comments: number; shares: number; platform: string }> }>("/api/posts"),
+
+  // Database Expansion (NEW)
+  scrapePosts: (keywords: string, platforms: string[], count: number = 20) =>
+    post<{
+      success: boolean;
+      scraped_posts: Array<{
+        text: string;
+        likes: number;
+        comments: number;
+        shares: number;
+        platform: string;
+        emotion: string;
+        ers: number;
+      }>;
+      added_count: number;
+      mode: string;
+      message: string;
+    }>("/api/database/scrape", { keywords, platforms, count }),
+
+  addScrapedPosts: (posts: Array<{
+    text: string;
+    likes: number;
+    comments: number;
+    shares: number;
+    platform: string;
+  }>) =>
+    post<{
+      success: boolean;
+      added_count: number;
+      total_posts: number;
+      message: string;
+    }>("/api/database/add-posts", { posts }),
+
+  getDatabaseStats: () =>
+    get<{
+      total_posts: number;
+      avg_ers: number;
+      max_ers: number;
+      min_ers: number;
+      platforms: Record<string, number>;
+      emotions: Record<string, number>;
+      sources: Record<string, number>;
+    }>("/api/database/stats"),
 };

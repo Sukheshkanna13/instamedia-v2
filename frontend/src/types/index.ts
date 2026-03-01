@@ -150,7 +150,7 @@ export interface AsyncState<T> {
   error:   string | null;
 }
 
-export type Tab = "overview" | "dna" | "ideation" | "studio" | "calendar" | "library" | "connections" | "drift" | "coldstart";
+export type Tab = "overview" | "dna" | "ideation" | "studio" | "calendar" | "library" | "connections" | "database" | "drift" | "coldstart";
 
 export interface NavItem {
   id:    Tab;

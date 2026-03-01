@@ -10,6 +10,15 @@ const FOCUS_OPTIONS = [
   "Industry hot takes",
   "Behind-the-scenes",
   "Community celebration",
+  "Product launch announcement",
+  "Company culture & values",
+  "Educational content series",
+  "User-generated content",
+  "Seasonal campaigns",
+  "Event promotion",
+  "Partnership announcement",
+  "Thought leadership",
+  "Custom (describe below)", // NEW
 ];
 
 const ANGLE_COLOR: Record<string, string> = {
@@ -31,17 +40,35 @@ interface Props {
 export default function Ideation({ onSelectIdea }: Props) {
   const [focus,    setFocus]    = useState("General brand storytelling");
   const [custom,   setCustom]   = useState("");
+  const [showCustom, setShowCustom] = useState(false);
   const [ideas,    setIdeas]    = useState<ContentIdea[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState<string|null>(null);
   const [selected, setSelected] = useState<string|null>(null);
 
+  const handleFocusChange = (value: string) => {
+    setFocus(value);
+    setShowCustom(value === "Custom (describe below)");
+  };
+
   const handleGenerate = async () => {
+    const focusArea = showCustom ? custom : focus;
+    
+    if (showCustom && !custom.trim()) {
+      setError("Please describe your custom focus area");
+      return;
+    }
+    
+    if (showCustom && custom.length < 20) {
+      setError("Please provide more detail (at least 20 characters)");
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setIdeas([]);
     try {
-      const res = await api.ideate("default", custom || focus);
+      const res = await api.ideate("default", focusArea);
       setIdeas(res.result?.ideas ?? []);
     } catch (e) {
       setError((e as Error).message);
@@ -77,24 +104,64 @@ export default function Ideation({ onSelectIdea }: Props) {
           <div className="section-title">What Are We Writing About?</div>
         </div>
 
-        <div className="grid-2" style={{ gap:16, marginBottom:16 }}>
-          <div className="field">
-            <label className="field-label">Focus Area</label>
-            <select className="select" value={focus} onChange={e => setFocus(e.target.value)}>
-              {FOCUS_OPTIONS.map(f => <option key={f}>{f}</option>)}
-            </select>
-          </div>
+        <div className="field" style={{ marginBottom:16 }}>
+          <label className="field-label">Focus Area</label>
+          <select className="select" value={focus} onChange={e => handleFocusChange(e.target.value)}>
+            {FOCUS_OPTIONS.map(f => <option key={f}>{f}</option>)}
+          </select>
+        </div>
 
-          <div className="field">
-            <label className="field-label">Custom Direction (optional)</label>
-            <input className="input"
-              placeholder="Or describe what you want to write about..."
+        {showCustom && (
+          <div className="field" style={{ marginBottom:16 }}>
+            <label className="field-label">
+              Describe Your Custom Focus Area
+              <span style={{ color:"var(--text-muted)", fontWeight:400, marginLeft:8 }}>
+                (Be specific - min 20 characters)
+              </span>
+            </label>
+            <textarea 
+              className="input"
+              placeholder="Example: Launch of our new eco-friendly product line targeting millennials who care about sustainability and want to make a positive environmental impact..."
               value={custom}
               onChange={e => setCustom(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleGenerate()}
+              rows={4}
+              style={{ 
+                resize: "vertical",
+                minHeight: "100px",
+                fontFamily: "var(--font-sans)",
+                lineHeight: 1.6
+              }}
             />
+            <div style={{ 
+              display:"flex", 
+              justifyContent:"space-between", 
+              marginTop:6,
+              fontSize:11,
+              color: custom.length < 20 ? "var(--coral)" : custom.length > 500 ? "var(--amber)" : "var(--text-muted)"
+            }}>
+              <span>
+                {custom.length < 20 && "Need at least 20 characters"}
+                {custom.length >= 20 && custom.length <= 500 && "✓ Good detail level"}
+                {custom.length > 500 && "Consider being more concise"}
+              </span>
+              <span>{custom.length} / 500</span>
+            </div>
           </div>
-        </div>
+        )}
+
+        {!showCustom && (
+          <div style={{
+            padding:12,
+            background:"rgba(0,212,184,0.05)",
+            border:"1px solid rgba(0,212,184,0.1)",
+            borderRadius:"var(--r)",
+            marginBottom:16
+          }}>
+            <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.6 }}>
+              💡 <strong>Tip:</strong> Select "Custom (describe below)" for more specific content ideas tailored to your exact needs.
+            </div>
+          </div>
+        )}
 
         <button className="btn btn-primary btn-lg" onClick={handleGenerate} disabled={loading}>
           {loading

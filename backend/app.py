@@ -25,6 +25,7 @@ GEMINI_API_KEY   = os.getenv("GEMINI_API_KEY",   "")
 GROQ_API_KEY     = os.getenv("GROQ_API_KEY",     "")
 SUPABASE_URL     = os.getenv("SUPABASE_URL",     "")
 SUPABASE_ANON    = os.getenv("SUPABASE_ANON_KEY","")
+APIFY_API_KEY    = os.getenv("APIFY_API_KEY",    "")
 LLM_PROVIDER     = os.getenv("LLM_PROVIDER", "gemini")
 
 if not GEMINI_API_KEY and not GROQ_API_KEY:
@@ -53,16 +54,66 @@ class MockCollection:
 collection = MockCollection()
 print("⚠️  ChromaDB mocked (Python 3.14 compatibility mode).")
 
-# Supabase client (graceful fallback if not configured)
+# Supabase client (enhanced with validation and testing)
 supabase: Client = None
-try:
-    if SUPABASE_URL != "YOUR_SUPABASE_URL":
-        supabase = create_client(SUPABASE_URL, SUPABASE_ANON)
-        print("✅ Supabase connected.")
-    else:
+
+def validate_and_connect_supabase():
+    """Validate credentials and establish Supabase connection with detailed logging"""
+    global supabase
+    
+    # Check if configured
+    if not SUPABASE_URL or SUPABASE_URL == "your_supabase_project_url":
         print("⚠️  Supabase not configured — using local fallback storage.")
-except Exception as e:
-    print(f"⚠️  Supabase connection failed: {e}")
+        return False
+    
+    # Validate URL format
+    if not SUPABASE_URL.startswith("https://"):
+        print(f"❌ Supabase URL invalid: Must start with 'https://' (got: {SUPABASE_URL[:20]}...)")
+        return False
+    
+    if not ".supabase.co" in SUPABASE_URL:
+        print(f"❌ Supabase URL invalid: Must contain '.supabase.co' (got: {SUPABASE_URL})")
+        return False
+    
+    # Validate key format
+    if not SUPABASE_ANON or SUPABASE_ANON == "your_supabase_anon_key":
+        print("❌ Supabase key not configured")
+        return False
+    
+    if not SUPABASE_ANON.startswith("eyJ"):
+        print(f"❌ Supabase key invalid: Should start with 'eyJ' (got: {SUPABASE_ANON[:10]}...)")
+        return False
+    
+    # Attempt connection
+    try:
+        print(f"🔄 Connecting to Supabase: {SUPABASE_URL}")
+        supabase = create_client(SUPABASE_URL, SUPABASE_ANON)
+        
+        # Test connection with a simple query
+        test_result = supabase.table("brand_dna").select("count").limit(1).execute()
+        
+        print(f"✅ Supabase connected successfully! (Tables accessible)")
+        return True
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Supabase connection failed: {error_msg}")
+        
+        # Provide helpful error messages
+        if "Invalid API key" in error_msg or "401" in error_msg:
+            print("   → Check your SUPABASE_ANON_KEY is correct")
+            print("   → Get it from: Supabase Dashboard → Settings → API → anon/public key")
+        elif "404" in error_msg or "not found" in error_msg:
+            print("   → Check your SUPABASE_URL is correct")
+            print("   → Should be: https://xxxxx.supabase.co")
+        elif "relation" in error_msg or "table" in error_msg:
+            print("   → Tables may not exist yet. Run database migrations.")
+        
+        supabase = None
+        return False
+
+# Initialize Supabase connection
+supabase_connected = validate_and_connect_supabase()
 
 # In-memory fallback when Supabase isn't configured
 _local_brand_dna = {}
@@ -617,6 +668,204 @@ def get_posts():
              for d,m in zip(all_p["documents"],all_p["metadatas"])]
     posts.sort(key=lambda x: x["ers"], reverse=True)
     return jsonify({"posts":posts})
+
+
+# ── DATABASE EXPANSION (Web Scraping) ────────────────────────────────────────
+
+@app.route("/api/database/scrape", methods=["POST"])
+def scrape_posts():
+    """
+    Scrape posts from social media and add to database.
+    Body: {
+      keywords: string,
+      platforms: ["instagram", "linkedin", "twitter"],
+      count: number (default 20)
+    }
+    """
+    data = request.get_json()
+    keywords = data.get("keywords", "").strip()
+    platforms = data.get("platforms", ["instagram"])
+    count = min(int(data.get("count", 20)), 100)  # Max 100 posts
+    
+    if not keywords:
+        return jsonify({"error": "Keywords required"}), 400
+    
+    if not APIFY_API_KEY:
+        # Fallback: Generate mock scraped posts for demo
+        return jsonify({
+            "success": True,
+            "message": "Apify not configured. Using mock data for demo.",
+            "scraped_posts": generate_mock_scraped_posts(keywords, count),
+            "added_count": 0,
+            "mode": "mock"
+        })
+    
+    # TODO: Implement actual Apify scraping when API key is available
+    # For now, return mock data
+    scraped_posts = generate_mock_scraped_posts(keywords, count)
+    
+    return jsonify({
+        "success": True,
+        "scraped_posts": scraped_posts,
+        "added_count": 0,
+        "mode": "mock",
+        "message": f"Found {len(scraped_posts)} posts. Review and approve to add to database."
+    })
+
+
+@app.route("/api/database/add-posts", methods=["POST"])
+def add_scraped_posts():
+    """
+    Add approved scraped posts to the database.
+    Body: {
+      posts: [{text, likes, comments, shares, platform}]
+    }
+    """
+    data = request.get_json()
+    posts = data.get("posts", [])
+    
+    if not posts:
+        return jsonify({"error": "No posts provided"}), 400
+    
+    added = 0
+    for post in posts:
+        try:
+            text = post.get("text", "").strip()
+            if not text or len(text) < 10:
+                continue
+            
+            # Calculate ERS
+            ers = calculate_ers(
+                int(post.get("likes", 0)),
+                int(post.get("comments", 0)),
+                int(post.get("shares", 0))
+            )
+            
+            # Analyze emotion with LLM
+            emotion = analyze_post_emotion(text)
+            
+            # Add to database
+            post_id = f"scraped_{collection.count()}_{added}"
+            collection.add(
+                ids=[post_id],
+                embeddings=[embed_text(text)],
+                documents=[text],
+                metadatas=[{
+                    "ers": ers,
+                    "likes": int(post.get("likes", 0)),
+                    "comments": int(post.get("comments", 0)),
+                    "shares": int(post.get("shares", 0)),
+                    "platform": post.get("platform", "unknown"),
+                    "emotion": emotion,
+                    "source": "scraped"
+                }]
+            )
+            added += 1
+        except Exception as e:
+            print(f"Error adding post: {e}")
+            continue
+    
+    return jsonify({
+        "success": True,
+        "added_count": added,
+        "total_posts": collection.count(),
+        "message": f"Added {added} posts to your emotional database"
+    })
+
+
+@app.route("/api/database/stats", methods=["GET"])
+def get_database_stats():
+    """Get database statistics for dashboard"""
+    if collection.count() == 0:
+        return jsonify({
+            "total_posts": 0,
+            "avg_ers": 0,
+            "platforms": {},
+            "emotions": {},
+            "sources": {}
+        })
+    
+    all_p = collection.get(include=["metadatas"])
+    metadatas = all_p["metadatas"]
+    
+    # Calculate stats
+    ers_scores = [m.get("ers", 0) for m in metadatas]
+    platforms = {}
+    emotions = {}
+    sources = {}
+    
+    for m in metadatas:
+        # Platform distribution
+        platform = m.get("platform", "unknown")
+        platforms[platform] = platforms.get(platform, 0) + 1
+        
+        # Emotion distribution
+        emotion = m.get("emotion", "unknown")
+        emotions[emotion] = emotions.get(emotion, 0) + 1
+        
+        # Source distribution
+        source = m.get("source", "seed")
+        sources[source] = sources.get(source, 0) + 1
+    
+    return jsonify({
+        "total_posts": collection.count(),
+        "avg_ers": round(sum(ers_scores) / len(ers_scores), 2) if ers_scores else 0,
+        "max_ers": round(max(ers_scores), 2) if ers_scores else 0,
+        "min_ers": round(min(ers_scores), 2) if ers_scores else 0,
+        "platforms": platforms,
+        "emotions": emotions,
+        "sources": sources
+    })
+
+
+# ── HELPER FUNCTIONS ──────────────────────────────────────────────────────────
+
+def generate_mock_scraped_posts(keywords: str, count: int):
+    """Generate mock scraped posts for demo purposes"""
+    import random
+    
+    emotions = ["Inspiring", "Authentic", "Vulnerable", "Educational", "Entertaining"]
+    platforms = ["instagram", "linkedin", "twitter"]
+    
+    posts = []
+    for i in range(min(count, 20)):
+        likes = random.randint(100, 5000)
+        comments = random.randint(10, 500)
+        shares = random.randint(5, 200)
+        
+        posts.append({
+            "text": f"Mock post about {keywords} - This is a sample post that would be scraped from social media. It contains relevant content about {keywords} and demonstrates the emotional tone we're looking for. #{keywords.replace(' ', '')}",
+            "likes": likes,
+            "comments": comments,
+            "shares": shares,
+            "platform": random.choice(platforms),
+            "emotion": random.choice(emotions),
+            "ers": calculate_ers(likes, comments, shares)
+        })
+    
+    return posts
+
+
+def analyze_post_emotion(text: str) -> str:
+    """Analyze the emotional tone of a post using LLM"""
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
+        return "Unknown"
+    
+    prompt = f"""Analyze the emotional tone of this social media post in ONE WORD.
+
+Post: {text[:200]}
+
+Choose ONE from: Inspiring, Authentic, Vulnerable, Educational, Entertaining, Promotional, Informative, Humorous, Empathetic, Authoritative
+
+Return ONLY the single word, nothing else."""
+    
+    try:
+        result = call_llm(prompt).strip()
+        # Extract first word if LLM returns more
+        emotion = result.split()[0].strip('.,!?')
+        return emotion
+    except:
+        return "Unknown"
 
 
 if __name__ == "__main__":
