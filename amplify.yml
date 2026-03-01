@@ -1,0 +1,48 @@
+version: 1
+# AWS Amplify Build Configuration for InstaMedia AI v2
+
+# Backend (Flask API)
+backend:
+  phases:
+    preBuild:
+      commands:
+        - cd backend
+        - pip install --upgrade pip
+        - pip install -r requirements.txt
+    build:
+      commands:
+        - echo "Backend dependencies installed"
+        - python --version
+        - pip list
+  artifacts:
+    baseDirectory: backend
+    files:
+      - '**/*'
+
+# Frontend (React + Vite)
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd frontend
+        - npm ci --legacy-peer-deps
+    build:
+      commands:
+        - npm run build
+        - echo "Build complete"
+  artifacts:
+    baseDirectory: frontend/dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - frontend/node_modules/**/*
+
+# Environment variables (set these in Amplify Console)
+# LLM_PROVIDER=gemini
+# GEMINI_API_KEY=your_key_here
+# GROQ_API_KEY=your_key_here
+# SUPABASE_URL=your_url_here
+# SUPABASE_ANON_KEY=your_key_here
+# FLASK_ENV=production
+# PORT=5001
