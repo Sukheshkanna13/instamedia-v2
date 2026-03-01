@@ -103,6 +103,7 @@ CloudFront → API Gateway → Lambda Authorizer (Cognito JWT)
 
 **Endpoints**:
 - `POST /api/brand-dna` → Lambda: SaveBrandDNA
+- `GET /api/esg/presigned-url` → Lambda: GeneratePresignedURL (for CSV upload)
 - `POST /api/esg/upload` → Lambda: IngestHistoricalPosts
 - `POST /api/ideate` → Lambda: GenerateIdeas
 - `POST /api/studio/generate` → Lambda: GenerateContent
@@ -110,20 +111,470 @@ CloudFront → API Gateway → Lambda Authorizer (Cognito JWT)
 - `GET /api/calendar` → Lambda: GetScheduledPosts
 - `POST /api/calendar/schedule` → Lambda: SchedulePost
 - `GET /api/dashboard` → Lambda: GetDashboardMetrics
+- `GET /api/auth/{platform}` → Lambda: InitiateOAuth (redirect to social platform)
+- `GET /api/auth/callback` → Lambda: HandleOAuthCallback (exchange code for token)
 
 **Features**:
 - Request validation (JSON schema)
 - Rate limiting per API key (1000 req/hour for free tier)
 - CORS configuration for frontend domain
 - CloudWatch logging for all requests
+- **29-second integration timeout** (hard AWS limit - see Real-Time Bottlenecks section)
 
 **Cost**: Free tier: 1M API calls/month
 
 ---
 
+## ⚠️ Real-Time Bottlenecks & Critical Risks
+
+### Risk 1: API Gateway 29-Second Timeout Limit
+
+**The Problem**: API Gateway has a **hard, unchangeable integration timeout of 29 seconds**. Your `GenerateContent` and `EmotionalAligner` Lambdas perform multi-step synchronous operations:
+
+```
+Fetch Brand DNA → Generate Embeddings → OpenSearch k-NN → 
+Claude 3 Generation → Comprehend Toxicity Check
+```
+
+If Claude hallucinates or takes too long, or if OpenSearch experiences a cold start, your Lambda might exceed 29 seconds, resulting in a **504 Gateway Timeout** for the user.
+
+**The Fix**:
+
+1. **Implement Aggressive Timeouts in Lambda**:
+```python
+# handlers/creative_studio.py
+import boto3
+from botocore.config import Config
+
+# Configure Bedrock client with strict timeout
+bedrock_config = Config(
+    read_timeout=20,  # 20 seconds max for Bedrock response
+    connect_timeout=5,
+    retries={'max_attempts': 2, 'mode': 'standard'}
+)
+bedrock = boto3.client('bedrock-runtime', config=bedrock_config)
+
+def lambda_handler(event, context):
+    try:
+        # Set Lambda timeout to 25s (4s buffer before API Gateway timeout)
+        response = bedrock.invoke_model(
+            modelId='anthropic.claude-3-haiku-20240307-v1:0',
+            body=json.dumps({
+                'anthropic_version': 'bedrock-2023-05-31',
+                'max_tokens': 512,  # Limit tokens to ensure fast response
+                'messages': [{'role': 'user', 'content': prompt}]
+            })
+        )
+        return {'statusCode': 200, 'body': json.dumps(result)}
+    except Exception as e:
+        # Graceful degradation
+        return {
+            'statusCode': 503,
+            'body': json.dumps({
+                'error': 'Content generation timed out. Please try again.',
+                'retry': True
+            })
+        }
+```
+
+2. **Set Lambda Timeout to 25 seconds** (not 30s) to ensure it fails before API Gateway timeout
+
+3. **Use Claude 3 Haiku** (not Sonnet/Opus) - Haiku typically responds in 2-5 seconds
+
+4. **Frontend Retry Logic**:
+```typescript
+// frontend/src/lib/api.ts
+async function generateContent(topic: string, retries = 2): Promise<Content> {
+  try {
+    const response = await fetch('/api/studio/generate', {
+      method: 'POST',
+      body: JSON.stringify({ topic }),
+      signal: AbortSignal.timeout(28000) // Client-side 28s timeout
+    });
+    return await response.json();
+  } catch (error) {
+    if (retries > 0 && error.name === 'TimeoutError') {
+      return generateContent(topic, retries - 1);
+    }
+    throw error;
+  }
+}
+```
+
+**Expected Latency Budget**:
+- Brand DNA fetch: 50ms (DynamoDB)
+- Generate embedding: 200ms (Bedrock Titan)
+- OpenSearch k-NN query: 300ms
+- Claude 3 Haiku generation: 3-5s
+- Comprehend toxicity check: 100ms
+- **Total: ~6 seconds** (well within 29s limit)
+
+---
+
+### Risk 2: OpenSearch Serverless "Free Tier" Reality
+
+**The Problem**: OpenSearch Serverless scales in **OCUs (OpenSearch Compute Units)**. While AWS offers 750 OCU-hours/month free tier, a Vector Search collection actively running consumes a **minimum of 1 OCU** (0.5 for ingest, 0.5 for search) continuously.
+
+**Math**: 1 OCU × 24 hours × 31 days = **744 OCU-hours/month** (uses almost entire free tier)
+
+If not configured carefully to scale to zero during idle periods, it can burn through the 750 hours rapidly and start charging **$0.24/OCU-hour** ($178/month for 1 OCU running 24/7).
+
+**The Fix**:
+
+1. **Configure Minimum Capacity to 1 OCU** (not auto-scale to 2+):
+```bash
+aws opensearchserverless create-collection \
+  --name instamedia-esg-vectors \
+  --type VECTORSEARCH \
+  --standby-replicas DISABLED
+```
+
+2. **Monitor OCU Usage Daily**:
+```bash
+# Check current OCU consumption
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/AOSS \
+  --metric-name SearchOCU \
+  --dimensions Name=CollectionName,Value=instamedia-esg-vectors \
+  --start-time 2025-03-01T00:00:00Z \
+  --end-time 2025-03-01T23:59:59Z \
+  --period 3600 \
+  --statistics Average
+```
+
+3. **Set CloudWatch Alarm**:
+```json
+{
+  "AlarmName": "OpenSearch-OCU-Exceeded-FreeTier",
+  "MetricName": "SearchOCU",
+  "Namespace": "AWS/AOSS",
+  "Statistic": "Average",
+  "Period": 3600,
+  "EvaluationPeriods": 1,
+  "Threshold": 0.8,
+  "ComparisonOperator": "GreaterThanThreshold",
+  "AlarmActions": ["arn:aws:sns:us-east-1:ACCOUNT:billing-alerts"]
+}
+```
+
+4. **Hackathon Workaround**: For the 2-week prototype, use **OpenSearch Provisioned** (t3.small.search instance) instead:
+   - Cost: ~$0.036/hour = $26/month (cheaper than serverless for low usage)
+   - Full control over capacity
+   - Can be stopped when not demoing
+
+**Alternative for Prototype**: Keep ChromaDB locally and only migrate to OpenSearch for production deployment.
+
+---
+
+### Risk 3: Lambda Cold Starts on Critical Paths
+
+**The Problem**: If the `EmotionalAligner` Lambda scales from 0 to 1 when a user clicks "Score," a **3-second cold start** + 5-second LLM execution = **8 seconds total latency** (feels sluggish in UI).
+
+**Cold Start Breakdown**:
+- Lambda initialization: 1-2s
+- Python runtime + dependencies: 1-2s
+- First Bedrock API call: +500ms
+- **Total cold start penalty**: 2-3s
+
+**The Fix**:
+
+1. **Free Lambda Warmer** (Hackathon Trick):
+```yaml
+# template.yaml - Add to SAM template
+WarmUpRule:
+  Type: AWS::Events::Rule
+  Properties:
+    Description: Keep critical Lambdas warm
+    ScheduleExpression: rate(4 minutes)
+    State: ENABLED
+    Targets:
+      - Arn: !GetAtt EmotionalAlignerFunction.Arn
+        Id: WarmEmotionalAligner
+        Input: '{"warmup": true}'
+      - Arn: !GetAtt GenerateContentFunction.Arn
+        Id: WarmGenerateContent
+        Input: '{"warmup": true}'
+
+WarmUpPermission:
+  Type: AWS::Lambda::Permission
+  Properties:
+    FunctionName: !Ref EmotionalAlignerFunction
+    Action: lambda:InvokeFunction
+    Principal: events.amazonaws.com
+    SourceArn: !GetAtt WarmUpRule.Arn
+```
+
+2. **Handle Warmup Requests in Lambda**:
+```python
+# handlers/emotional_aligner.py
+def lambda_handler(event, context):
+    # Ignore warmup pings
+    if event.get('warmup'):
+        return {'statusCode': 200, 'body': 'warmed'}
+    
+    # Normal request handling
+    body = json.loads(event['body'])
+    # ... rest of logic
+```
+
+3. **Optimize Deployment Package**:
+   - Use Lambda Layers for heavy dependencies (boto3, numpy)
+   - Keep deployment package < 10MB (unzipped < 50MB)
+   - Use Python 3.11 (faster startup than 3.9)
+
+4. **Provisioned Concurrency** (Production Only):
+   - Cost: $0.015/hour per provisioned instance
+   - For 1 instance: $10.80/month
+   - Only enable for production after validating demand
+
+**Expected Latency**:
+- Cold start: 2-3s (first request only)
+- Warm start: 50ms (subsequent requests)
+- With 4-minute warmer: 95% of requests are warm
+
+---
+
 ### 3. Compute Layer: AWS Lambda Functions
 
-**Runtime**: Python 3.11 (for ML libraries compatibility)
+**Runtime**: Python 3.11 (for ML libraries compatibility and faster cold starts)
+
+#### Lambda Function: GeneratePresignedURL
+**Trigger**: API Gateway GET /api/esg/presigned-url
+**Purpose**: Generate S3 pre-signed URL for secure CSV upload from frontend
+**Flow**:
+1. Validate user authentication (Cognito JWT)
+2. Generate unique filename: `{brand_id}/uploads/{timestamp}.csv`
+3. Create S3 pre-signed POST URL (valid for 5 minutes)
+4. Return URL + required form fields to frontend
+
+**Memory**: 256 MB | **Timeout**: 5s | **Concurrency**: 20
+
+**Why This is Critical**: API Gateway has a **10MB payload limit**. Users uploading large CSV files (1000+ posts) would hit this limit. Pre-signed URLs allow direct browser → S3 upload, bypassing API Gateway entirely.
+
+**Implementation**:
+```python
+import boto3
+from datetime import timedelta
+
+s3_client = boto3.client('s3')
+
+def lambda_handler(event, context):
+    brand_id = event['requestContext']['authorizer']['claims']['sub']
+    filename = f"{brand_id}/uploads/{int(time.time())}.csv"
+    
+    presigned_post = s3_client.generate_presigned_post(
+        Bucket='instamedia-brand-assets',
+        Key=filename,
+        Fields={'acl': 'private'},
+        Conditions=[
+            {'acl': 'private'},
+            ['content-length-range', 1, 10485760]  # 1 byte to 10MB
+        ],
+        ExpiresIn=300  # 5 minutes
+    )
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps({
+            'upload_url': presigned_post['url'],
+            'fields': presigned_post['fields'],
+            'filename': filename
+        })
+    }
+```
+
+**Frontend Usage**:
+```typescript
+// frontend/src/lib/api.ts
+async function uploadCSV(file: File) {
+  // Step 1: Get pre-signed URL
+  const { upload_url, fields, filename } = await fetch('/api/esg/presigned-url').then(r => r.json());
+  
+  // Step 2: Upload directly to S3
+  const formData = new FormData();
+  Object.entries(fields).forEach(([key, value]) => formData.append(key, value));
+  formData.append('file', file);
+  
+  await fetch(upload_url, { method: 'POST', body: formData });
+  
+  // Step 3: Trigger ESG ingestion
+  await fetch('/api/esg/upload', {
+    method: 'POST',
+    body: JSON.stringify({ filename })
+  });
+}
+```
+
+---
+
+#### Lambda Function: InitiateOAuth
+**Trigger**: API Gateway GET /api/auth/{platform}
+**Purpose**: Redirect user to social media OAuth login page
+**Flow**:
+1. Validate platform (instagram, linkedin, twitter)
+2. Retrieve OAuth client_id from Secrets Manager
+3. Generate state parameter (CSRF protection)
+4. Store state in DynamoDB with 5-minute TTL
+5. Construct OAuth authorization URL
+6. Return 302 redirect response
+
+**Memory**: 256 MB | **Timeout**: 5s | **Concurrency**: 10
+
+**Implementation**:
+```python
+import secrets
+import boto3
+
+secrets_client = boto3.client('secretsmanager')
+dynamodb = boto3.resource('dynamodb')
+
+OAUTH_CONFIGS = {
+    'instagram': {
+        'auth_url': 'https://api.instagram.com/oauth/authorize',
+        'scope': 'user_profile,user_media'
+    },
+    'linkedin': {
+        'auth_url': 'https://www.linkedin.com/oauth/v2/authorization',
+        'scope': 'w_member_social'
+    },
+    'twitter': {
+        'auth_url': 'https://twitter.com/i/oauth2/authorize',
+        'scope': 'tweet.read tweet.write users.read'
+    }
+}
+
+def lambda_handler(event, context):
+    platform = event['pathParameters']['platform']
+    brand_id = event['requestContext']['authorizer']['claims']['sub']
+    
+    if platform not in OAUTH_CONFIGS:
+        return {'statusCode': 400, 'body': 'Invalid platform'}
+    
+    # Get OAuth credentials from Secrets Manager
+    secret = secrets_client.get_secret_value(SecretId=f'oauth/{platform}')
+    credentials = json.loads(secret['SecretString'])
+    
+    # Generate CSRF state token
+    state = secrets.token_urlsafe(32)
+    
+    # Store state in DynamoDB (5-minute TTL)
+    table = dynamodb.Table('OAuthStates')
+    table.put_item(Item={
+        'state': state,
+        'brand_id': brand_id,
+        'platform': platform,
+        'ttl': int(time.time()) + 300
+    })
+    
+    # Construct OAuth URL
+    config = OAUTH_CONFIGS[platform]
+    redirect_uri = 'https://api.instamedia.ai/api/auth/callback'
+    auth_url = (
+        f"{config['auth_url']}?"
+        f"client_id={credentials['client_id']}&"
+        f"redirect_uri={redirect_uri}&"
+        f"scope={config['scope']}&"
+        f"response_type=code&"
+        f"state={state}"
+    )
+    
+    return {
+        'statusCode': 302,
+        'headers': {'Location': auth_url}
+    }
+```
+
+---
+
+#### Lambda Function: HandleOAuthCallback
+**Trigger**: API Gateway GET /api/auth/callback
+**Purpose**: Exchange authorization code for access token and store in Secrets Manager
+**Flow**:
+1. Validate state parameter (CSRF check)
+2. Retrieve state from DynamoDB
+3. Exchange authorization code for access token via platform API
+4. Store access token + refresh token in Secrets Manager
+5. Update brand profile with connected platform status
+6. Redirect user back to frontend dashboard
+
+**Memory**: 512 MB | **Timeout**: 15s | **Concurrency**: 5
+
+**Implementation**:
+```python
+import requests
+import boto3
+
+secrets_client = boto3.client('secretsmanager')
+dynamodb = boto3.resource('dynamodb')
+
+def lambda_handler(event, context):
+    code = event['queryStringParameters']['code']
+    state = event['queryStringParameters']['state']
+    
+    # Validate state (CSRF protection)
+    table = dynamodb.Table('OAuthStates')
+    response = table.get_item(Key={'state': state})
+    
+    if 'Item' not in response:
+        return {'statusCode': 400, 'body': 'Invalid state parameter'}
+    
+    oauth_state = response['Item']
+    brand_id = oauth_state['brand_id']
+    platform = oauth_state['platform']
+    
+    # Delete used state
+    table.delete_item(Key={'state': state})
+    
+    # Get OAuth credentials
+    secret = secrets_client.get_secret_value(SecretId=f'oauth/{platform}')
+    credentials = json.loads(secret['SecretString'])
+    
+    # Exchange code for token
+    token_url = {
+        'instagram': 'https://api.instagram.com/oauth/access_token',
+        'linkedin': 'https://www.linkedin.com/oauth/v2/accessToken',
+        'twitter': 'https://api.twitter.com/2/oauth2/token'
+    }[platform]
+    
+    token_response = requests.post(token_url, data={
+        'client_id': credentials['client_id'],
+        'client_secret': credentials['client_secret'],
+        'code': code,
+        'redirect_uri': 'https://api.instamedia.ai/api/auth/callback',
+        'grant_type': 'authorization_code'
+    })
+    
+    tokens = token_response.json()
+    
+    # Store tokens in Secrets Manager
+    secrets_client.create_secret(
+        Name=f'oauth-tokens/{brand_id}/{platform}',
+        SecretString=json.dumps({
+            'access_token': tokens['access_token'],
+            'refresh_token': tokens.get('refresh_token'),
+            'expires_at': int(time.time()) + tokens.get('expires_in', 3600)
+        })
+    )
+    
+    # Update brand profile
+    brands_table = dynamodb.Table('BrandProfiles')
+    brands_table.update_item(
+        Key={'brand_id': brand_id},
+        UpdateExpression='SET connected_platforms = list_append(if_not_exists(connected_platforms, :empty), :platform)',
+        ExpressionAttributeValues={
+            ':empty': [],
+            ':platform': [platform]
+        }
+    )
+    
+    # Redirect to frontend
+    return {
+        'statusCode': 302,
+        'headers': {'Location': f'https://app.instamedia.ai/dashboard?oauth_success={platform}'}
+    }
+```
+
+---
 
 #### Lambda Function: SaveBrandDNA
 **Trigger**: API Gateway POST /api/brand-dna
@@ -139,7 +590,7 @@ CloudFront → API Gateway → Lambda Authorizer (Cognito JWT)
 ---
 
 #### Lambda Function: IngestHistoricalPosts
-**Trigger**: API Gateway POST /api/esg/upload
+**Trigger**: API Gateway POST /api/esg/upload (after S3 upload via pre-signed URL)
 **Purpose**: Build Emotional Signal Graph from CSV upload
 **Flow**:
 1. Parse CSV from S3 (uploaded via pre-signed URL)
@@ -150,8 +601,45 @@ CloudFront → API Gateway → Lambda Authorizer (Cognito JWT)
 6. Calculate baseline EPM (centroid of top 20% posts)
 7. Store EPM in DynamoDB table `BrandProfiles`
 
-**Memory**: 1024 MB | **Timeout**: 300s | **Concurrency**: 5
-**Async**: Use SQS queue for batch processing if CSV > 100 posts
+**Memory**: 1024 MB | **Timeout**: 25s (not 300s - see API Gateway timeout risk) | **Concurrency**: 5
+**Async**: For large CSVs (>100 posts), trigger Step Functions workflow instead of synchronous processing
+
+**Critical Timeout Handling**:
+```python
+import boto3
+from botocore.config import Config
+
+# Configure with aggressive timeouts
+bedrock_config = Config(
+    read_timeout=15,
+    connect_timeout=5,
+    retries={'max_attempts': 2, 'mode': 'standard'}
+)
+bedrock = boto3.client('bedrock-runtime', config=bedrock_config, region_name='us-east-1')
+
+def lambda_handler(event, context):
+    filename = json.loads(event['body'])['filename']
+    
+    # Check remaining time
+    remaining_time = context.get_remaining_time_in_millis()
+    if remaining_time < 5000:  # Less than 5 seconds left
+        # Trigger async Step Functions workflow instead
+        stepfunctions = boto3.client('stepfunctions')
+        stepfunctions.start_execution(
+            stateMachineArn='arn:aws:states:REGION:ACCOUNT:stateMachine:ESGIngestion',
+            input=json.dumps({'filename': filename})
+        )
+        return {
+            'statusCode': 202,
+            'body': json.dumps({
+                'message': 'Large CSV detected. Processing asynchronously.',
+                'status': 'processing'
+            })
+        }
+    
+    # Process small CSVs synchronously (< 50 posts)
+    # ... rest of logic
+```
 
 ---
 
@@ -166,7 +654,33 @@ CloudFront → API Gateway → Lambda Authorizer (Cognito JWT)
 5. Parse response into structured JSON (5 ideas)
 6. Return ideas with reference post citations
 
-**Memory**: 512 MB | **Timeout**: 30s | **Concurrency**: 20
+**Memory**: 512 MB | **Timeout**: 25s (API Gateway safe) | **Concurrency**: 20
+
+**Timeout Protection**:
+```python
+bedrock_config = Config(read_timeout=20, connect_timeout=5)
+bedrock = boto3.client('bedrock-runtime', config=bedrock_config)
+
+def lambda_handler(event, context):
+    try:
+        response = bedrock.invoke_model(
+            modelId='anthropic.claude-3-haiku-20240307-v1:0',
+            body=json.dumps({
+                'anthropic_version': 'bedrock-2023-05-31',
+                'max_tokens': 800,  # Limit to ensure fast response
+                'messages': [{'role': 'user', 'content': prompt}]
+            })
+        )
+        return {'statusCode': 200, 'body': json.dumps(ideas)}
+    except Exception as e:
+        return {
+            'statusCode': 503,
+            'body': json.dumps({
+                'error': 'Idea generation timed out. Please try again.',
+                'retry': True
+            })
+        }
+```
 
 **Bedrock Prompt Template**:
 ```
@@ -181,6 +695,8 @@ Top-performing posts from this brand's history:
 
 Generate 5 content ideas that match this brand's emotional signature.
 For each idea, provide: title, hook, emotional_angle, platform, predicted_ERS.
+
+Respond in JSON format. Be concise - max 800 tokens total.
 ```
 
 ---
@@ -197,7 +713,57 @@ For each idea, provide: title, hook, emotional_angle, platform, predicted_ERS.
 6. Check for banned words from Brand DNA
 7. Return generated content
 
-**Memory**: 512 MB | **Timeout**: 30s | **Concurrency**: 20
+**Memory**: 512 MB | **Timeout**: 25s (API Gateway safe) | **Concurrency**: 20
+
+**Critical: This is a hot path - implement Lambda warmer (see Risk 3)**
+
+**Timeout-Safe Implementation**:
+```python
+bedrock_config = Config(read_timeout=18, connect_timeout=5)
+bedrock = boto3.client('bedrock-runtime', config=bedrock_config)
+comprehend = boto3.client('comprehend')
+
+def lambda_handler(event, context):
+    # Handle warmup pings
+    if event.get('warmup'):
+        return {'statusCode': 200, 'body': 'warmed'}
+    
+    body = json.loads(event['body'])
+    
+    try:
+        # Generate content (max 18s)
+        response = bedrock.invoke_model(
+            modelId='anthropic.claude-3-haiku-20240307-v1:0',
+            body=json.dumps({
+                'anthropic_version': 'bedrock-2023-05-31',
+                'max_tokens': 512,
+                'messages': [{'role': 'user', 'content': prompt}]
+            })
+        )
+        
+        content = json.loads(response['body'].read())['content'][0]['text']
+        
+        # Toxicity check (max 2s)
+        toxicity = comprehend.detect_toxic_content(
+            TextSegments=[{'Text': content}],
+            LanguageCode='en'
+        )
+        
+        if toxicity['ResultList'][0]['Toxicity'] > 0.7:
+            # Regenerate with safety prompt
+            content = regenerate_safe_content(prompt)
+        
+        return {'statusCode': 200, 'body': json.dumps({'content': content})}
+        
+    except Exception as e:
+        return {
+            'statusCode': 503,
+            'body': json.dumps({
+                'error': 'Content generation timed out. Please try again.',
+                'retry': True
+            })
+        }
+```
 
 ---
 
@@ -212,7 +778,112 @@ For each idea, provide: title, hook, emotional_angle, platform, predicted_ERS.
 5. Generate verdict, what_works, what_is_missing, rewrite_suggestion
 6. Return JSON response with score + explainability
 
-**Memory**: 512 MB | **Timeout**: 10s | **Concurrency**: 50
+**Memory**: 512 MB | **Timeout**: 25s (API Gateway safe) | **Concurrency**: 50
+
+**Critical: This is the MOST latency-sensitive function - MUST implement Lambda warmer**
+
+**Optimized Implementation**:
+```python
+bedrock_config = Config(read_timeout=18, connect_timeout=5)
+bedrock = boto3.client('bedrock-runtime', config=bedrock_config)
+opensearch = OpenSearch(hosts=[os.environ['OPENSEARCH_ENDPOINT']])
+
+def lambda_handler(event, context):
+    # Handle warmup pings (keeps Lambda warm)
+    if event.get('warmup'):
+        return {'statusCode': 200, 'body': 'warmed'}
+    
+    body = json.loads(event['body'])
+    brand_id = body['brand_id']
+    draft_text = body['draft_text']
+    
+    start_time = time.time()
+    
+    try:
+        # Step 1: Generate embedding (200ms)
+        embedding_response = bedrock.invoke_model(
+            modelId='amazon.titan-embed-text-v1',
+            body=json.dumps({'inputText': draft_text})
+        )
+        embedding = json.loads(embedding_response['body'].read())['embedding']
+        
+        # Step 2: OpenSearch k-NN query (300ms)
+        search_response = opensearch.search(
+            index='esg-posts',
+            body={
+                'size': 3,
+                'query': {
+                    'bool': {
+                        'must': [
+                            {'term': {'brand_id': brand_id}},
+                            {'knn': {
+                                'embedding_vector': {
+                                    'vector': embedding,
+                                    'k': 3
+                                }
+                            }}
+                        ]
+                    }
+                }
+            }
+        )
+        
+        similar_posts = search_response['hits']['hits']
+        
+        # Step 3: Calculate score (10ms)
+        scores = []
+        for post in similar_posts:
+            semantic_sim = post['_score']
+            ers = post['_source']['ers']
+            combined = (semantic_sim * 0.4) + (ers / 100 * 0.6)
+            scores.append(combined)
+        
+        resonance_score = int(sum(scores) / len(scores) * 100)
+        
+        # Step 4: Analyze with Claude (3-5s)
+        analysis_prompt = f"""
+        Draft post: {draft_text}
+        
+        Similar high-performing posts:
+        {json.dumps([p['_source']['post_text'] for p in similar_posts])}
+        
+        Analyze emotional gaps. Be concise (max 300 tokens).
+        Return JSON: {{"what_works": [], "what_is_missing": [], "rewrite_suggestion": ""}}
+        """
+        
+        analysis_response = bedrock.invoke_model(
+            modelId='anthropic.claude-3-haiku-20240307-v1:0',
+            body=json.dumps({
+                'anthropic_version': 'bedrock-2023-05-31',
+                'max_tokens': 300,
+                'messages': [{'role': 'user', 'content': analysis_prompt}]
+            })
+        )
+        
+        analysis = json.loads(analysis_response['body'].read())['content'][0]['text']
+        
+        elapsed = time.time() - start_time
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'resonance_score': resonance_score,
+                'verdict': 'Approved' if resonance_score > 70 else 'Needs Work',
+                'reference_posts': similar_posts,
+                'analysis': json.loads(analysis),
+                'latency_ms': int(elapsed * 1000)
+            })
+        }
+        
+    except Exception as e:
+        return {
+            'statusCode': 503,
+            'body': json.dumps({
+                'error': 'Scoring timed out. Please try again.',
+                'retry': True
+            })
+        }
+```
 
 **OpenSearch Query**:
 ```json
@@ -367,6 +1038,21 @@ Attributes:
 
 Capacity: On-Demand
 ```
+
+**Table: OAuthStates**
+```
+Partition Key: state (String)
+Attributes:
+  - brand_id (String)
+  - platform (String) // instagram | linkedin | twitter
+  - ttl (Number) // Unix timestamp for auto-deletion after 5 minutes
+  - created_at (String)
+
+TTL Attribute: ttl (enables automatic cleanup of expired states)
+Capacity: On-Demand
+```
+
+**Why This Table is Critical**: OAuth 2.0 requires CSRF protection via state parameters. This table stores temporary state tokens that are validated during the callback to prevent authorization code interception attacks.
 
 ---
 
@@ -766,6 +1452,49 @@ S3 Upload → EventBridge → Lambda (ParseCSV) → SQS (batch messages)
 
 ## End-to-End Workflow Examples
 
+### Workflow 0: Social Media OAuth Connection (NEW)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 1: User Initiates OAuth                                    │
+└─────────────────────────────────────────────────────────────────┘
+User clicks "Connect Instagram" → API Gateway → Lambda: InitiateOAuth
+                                                    ↓
+                                          Secrets Manager: Get OAuth client_id
+                                                    ↓
+                                          Generate CSRF state token
+                                                    ↓
+                                          DynamoDB: Store state (5-min TTL)
+                                                    ↓
+                                          Return 302 redirect to Instagram OAuth
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 2: User Authorizes on Instagram                            │
+└─────────────────────────────────────────────────────────────────┘
+User logs in on Instagram → Approves permissions
+                                ↓
+Instagram redirects to: /api/auth/callback?code=ABC&state=XYZ
+
+┌─────────────────────────────────────────────────────────────────┐
+│ Step 3: Exchange Code for Token                                 │
+└─────────────────────────────────────────────────────────────────┘
+API Gateway → Lambda: HandleOAuthCallback
+                  ↓
+        DynamoDB: Validate state (CSRF check)
+                  ↓
+        Secrets Manager: Get OAuth client_secret
+                  ↓
+        Instagram API: Exchange code for access_token
+                  ↓
+        Secrets Manager: Store access_token + refresh_token
+                  ↓
+        DynamoDB: Update BrandProfiles (connected_platforms)
+                  ↓
+        Return 302 redirect to frontend dashboard
+```
+
+---
+
 ### Workflow 1: Brand Onboarding + ESG Construction
 
 ```
@@ -785,11 +1514,20 @@ User → CloudFront → API Gateway → Lambda: SaveBrandDNA
 └─────────────────────────────────────────────────────────────────┘
 User → CloudFront → API Gateway → Lambda: GeneratePresignedURL
                                       ↓
-                            S3: Upload CSV to /uploads/
+                            Return: S3 pre-signed POST URL (5-min expiry)
                                       ↓
-                            EventBridge: S3 ObjectCreated event
+User browser → S3: Direct upload (bypasses API Gateway 10MB limit)
                                       ↓
-                            Step Functions: ESG Ingestion Workflow
+                            S3: ObjectCreated event
+                                      ↓
+                            EventBridge: Trigger ESG ingestion
+                                      ↓
+                            Lambda: IngestHistoricalPosts
+                                      ↓
+                            IF CSV > 100 posts:
+                                Step Functions: Async workflow
+                            ELSE:
+                                Synchronous processing (< 25s)
                                       ↓
                     ┌─────────────────┴─────────────────┐
                     ▼                                   ▼
@@ -1419,6 +2157,104 @@ def lambda_handler(event, context):
 - Use DynamoDB Streams → Lambda → OpenSearch pipeline
 - Implement eventual consistency model
 
+### Challenge 6: OAuth Token Refresh
+**Problem**: Social media access tokens expire (Instagram: 60 days, LinkedIn: 60 days, Twitter: varies)
+**Solution**:
+- Store refresh tokens in Secrets Manager
+- Implement Lambda function triggered by EventBridge (daily check)
+- Auto-refresh tokens before expiry
+- Send SNS alert if refresh fails (user must re-authenticate)
+
+**Implementation**:
+```python
+# Lambda: RefreshOAuthTokens (triggered daily)
+def lambda_handler(event, context):
+    secrets_client = boto3.client('secretsmanager')
+    
+    # List all OAuth token secrets
+    secrets = secrets_client.list_secrets(
+        Filters=[{'Key': 'name', 'Values': ['oauth-tokens/']}]
+    )
+    
+    for secret in secrets['SecretList']:
+        token_data = json.loads(secrets_client.get_secret_value(
+            SecretId=secret['ARN']
+        )['SecretString'])
+        
+        # Check if token expires within 7 days
+        if token_data['expires_at'] < time.time() + (7 * 86400):
+            # Refresh token
+            new_tokens = refresh_token(
+                platform=secret['Name'].split('/')[-1],
+                refresh_token=token_data['refresh_token']
+            )
+            
+            # Update secret
+            secrets_client.update_secret(
+                SecretId=secret['ARN'],
+                SecretString=json.dumps(new_tokens)
+            )
+```
+
+---
+
+## Missing Pieces Checklist
+
+### ✅ Now Included in Architecture
+
+1. **S3 Pre-Signed URL Generator** (`GET /api/esg/presigned-url`)
+   - Bypasses API Gateway 10MB payload limit
+   - Enables direct browser → S3 upload
+   - Secure with 5-minute expiry
+
+2. **OAuth Flow** (`GET /api/auth/{platform}` + `GET /api/auth/callback`)
+   - Complete OAuth 2.0 implementation
+   - CSRF protection via state parameter
+   - Token storage in Secrets Manager
+   - Automatic token refresh
+
+3. **API Gateway Timeout Protection**
+   - All Lambda timeouts set to 25s (not 30s)
+   - Aggressive Bedrock client timeouts (15-20s)
+   - Graceful error handling with retry hints
+
+4. **Lambda Warmer for Hot Paths**
+   - EventBridge rule pings critical Lambdas every 4 minutes
+   - Keeps EmotionalAligner and GenerateContent warm
+   - Free tier compatible
+
+5. **OpenSearch Cost Monitoring**
+   - CloudWatch alarm for OCU usage
+   - Daily billing dashboard checks
+   - Alternative: OpenSearch provisioned for prototype
+
+### 🔴 Still Missing (Add Before Production)
+
+1. **Rate Limiting per User**
+   - API Gateway usage plans with API keys
+   - DynamoDB table to track user quotas
+   - Return 429 Too Many Requests when exceeded
+
+2. **Content Moderation Dashboard**
+   - Admin interface to review flagged content
+   - Comprehend toxicity logs
+   - Manual override capability
+
+3. **Analytics & Observability**
+   - CloudWatch dashboard with key metrics
+   - X-Ray tracing for debugging
+   - Custom metrics for business KPIs (ERS accuracy, user retention)
+
+4. **Backup & Disaster Recovery**
+   - DynamoDB PITR enabled
+   - S3 versioning + cross-region replication
+   - OpenSearch automated snapshots
+
+5. **CI/CD Pipeline**
+   - GitHub Actions workflow
+   - Automated SAM deployments
+   - Integration tests before production deploy
+
 ---
 
 ## Code Structure
@@ -1429,6 +2265,10 @@ def lambda_handler(event, context):
 lambda/
 ├── handlers/
 │   ├── brand_dna.py          # SaveBrandDNA
+│   ├── presigned_url.py      # GeneratePresignedURL (NEW)
+│   ├── oauth_initiate.py     # InitiateOAuth (NEW)
+│   ├── oauth_callback.py     # HandleOAuthCallback (NEW)
+│   ├── oauth_refresh.py      # RefreshOAuthTokens (NEW - daily cron)
 │   ├── esg_ingestion.py      # IngestHistoricalPosts
 │   ├── ideation.py           # GenerateIdeas
 │   ├── creative_studio.py    # GenerateContent
@@ -1437,10 +2277,11 @@ lambda/
 │   ├── publisher.py          # PublishPost
 │   └── drift_detector.py     # DetectBrandDrift
 ├── lib/
-│   ├── bedrock_client.py     # Bedrock API wrapper
+│   ├── bedrock_client.py     # Bedrock API wrapper with timeout config
 │   ├── opensearch_client.py  # OpenSearch operations
 │   ├── dynamodb_client.py    # DynamoDB operations
 │   ├── comprehend_client.py  # Toxicity detection
+│   ├── oauth_platforms.py    # Platform-specific OAuth configs (NEW)
 │   └── utils.py              # ERS calculation, etc.
 ├── requirements.txt
 └── template.yaml             # SAM template
@@ -1536,21 +2377,38 @@ def test_emotional_aligner_high_score():
 - [ ] Request Bedrock model access (Claude 3 Haiku, Titan Embeddings)
 - [ ] Create S3 buckets with proper policies
 - [ ] Set up Cognito user pool
-- [ ] Configure Secrets Manager for OAuth tokens
+- [ ] **Register OAuth apps on social platforms**:
+  - [ ] Instagram: https://developers.facebook.com/apps/
+  - [ ] LinkedIn: https://www.linkedin.com/developers/apps/
+  - [ ] Twitter: https://developer.twitter.com/en/portal/dashboard
+- [ ] **Store OAuth credentials in Secrets Manager**:
+  ```bash
+  aws secretsmanager create-secret \
+    --name oauth/instagram \
+    --secret-string '{"client_id":"XXX","client_secret":"YYY"}'
+  ```
+- [ ] Configure redirect URIs on each platform: `https://api.instamedia.ai/api/auth/callback`
 
 ### Deployment
 - [ ] Deploy SAM template: `sam deploy --guided`
-- [ ] Create OpenSearch Serverless collection
+- [ ] Create OpenSearch Serverless collection (or provisioned t3.small for prototype)
+- [ ] **Enable DynamoDB TTL on OAuthStates table** (ttl attribute)
 - [ ] Upload frontend to S3 and configure CloudFront
 - [ ] Test all API endpoints with Postman
+- [ ] **Test OAuth flow end-to-end** (critical for publishing)
 - [ ] Load sample data for demo
 
 ### Post-Deployment
-- [ ] Set up CloudWatch alarms
+- [ ] Set up CloudWatch alarms (especially OpenSearch OCU usage)
 - [ ] Configure SNS topics for alerts
 - [ ] Enable X-Ray tracing
+- [ ] **Set up EventBridge rules**:
+  - [ ] Lambda warmer (every 4 minutes)
+  - [ ] OAuth token refresh (daily)
+  - [ ] Brand drift check (daily)
 - [ ] Document API endpoints
 - [ ] Create user onboarding guide
+- [ ] **Monitor AWS billing dashboard daily** (OpenSearch can surprise you)
 
 ---
 
@@ -1566,12 +2424,128 @@ This AWS architecture transforms InstaMedia AI from a local prototype into a pro
 5. **Observable**: Full visibility via CloudWatch, X-Ray
 6. **AWS-Native**: Leverages Bedrock, Comprehend, OpenSearch for AI capabilities
 
+**Critical Safeguards Implemented**:
+- ✅ API Gateway 29-second timeout protection (all Lambdas ≤ 25s)
+- ✅ Lambda warmer for hot paths (EmotionalAligner, GenerateContent)
+- ✅ OpenSearch cost monitoring (CloudWatch alarms)
+- ✅ S3 pre-signed URLs (bypass 10MB API Gateway limit)
+- ✅ Complete OAuth 2.0 flow with CSRF protection
+- ✅ Automatic OAuth token refresh
+- ✅ Graceful error handling with retry hints
+
+**Real-World Lessons Learned**:
+1. **Always set Lambda timeout < 29s** to fail before API Gateway
+2. **Monitor OpenSearch OCU usage daily** - it can burn through free tier fast
+3. **Implement Lambda warmers for latency-sensitive paths** - cold starts kill UX
+4. **Use pre-signed URLs for large file uploads** - don't route through API Gateway
+5. **OAuth requires 3 components**: initiate, callback, refresh (don't forget refresh!)
+
 **Next Steps**:
 1. Review and approve this architecture plan
 2. Set up AWS account and request Bedrock access
-3. Begin Phase 1 deployment (Lambda + DynamoDB + OpenSearch)
-4. Migrate prototype data to AWS
-5. Build demo for hackathon presentation
+3. Register OAuth apps on social platforms
+4. Begin Phase 1 deployment (Lambda + DynamoDB + OpenSearch)
+5. Migrate prototype data to AWS
+6. Build demo for hackathon presentation
+
+**Estimated Timeline**:
+- Week 1: Infrastructure setup + Lambda deployment
+- Week 2: Frontend integration + OAuth testing + Demo polish
+- Total: 2 weeks to production-ready prototype
+
+---
+
+## Hackathon-Specific Best Practices
+
+### 1. Start with Minimal Viable Architecture
+**Don't build everything at once**. For the hackathon demo, focus on:
+- ✅ Core flow: Brand DNA → ESG upload → Ideation → Generate → Score
+- ✅ 3 Lambda functions: GenerateIdeas, GenerateContent, EmotionalAligner
+- ❌ Skip: OAuth (use mock tokens), EventBridge schedulers, Step Functions
+
+**Rationale**: Judges care about the innovation (Emotional Signal Engine), not the plumbing.
+
+### 2. Use OpenSearch Provisioned (Not Serverless) for Demo
+**Cost**: t3.small.search = $0.036/hour = $0.86/day = $12 for 2 weeks
+**Why**: Predictable cost, can be stopped when not demoing, easier to debug
+
+```bash
+aws opensearch create-domain \
+  --domain-name instamedia-demo \
+  --engine-version OpenSearch_2.11 \
+  --cluster-config InstanceType=t3.small.search,InstanceCount=1 \
+  --ebs-options EBSEnabled=true,VolumeType=gp3,VolumeSize=10
+```
+
+### 3. Mock OAuth for Demo
+**Problem**: Setting up OAuth apps on 3 platforms takes 2-3 days (app review)
+**Solution**: Use mock tokens in Secrets Manager for demo
+
+```python
+# For demo only - bypass OAuth
+def get_platform_token(brand_id, platform):
+    if os.environ.get('DEMO_MODE') == 'true':
+        return 'DEMO_TOKEN_' + platform
+    else:
+        # Real OAuth flow
+        return secrets_manager.get_secret(f'oauth-tokens/{brand_id}/{platform}')
+```
+
+### 4. Pre-Load Demo Data
+**Create a seed script** that loads 3 sample brands with ESG data:
+
+```python
+# scripts/seed_demo_data.py
+DEMO_BRANDS = [
+    {
+        'brand_id': 'wellness-startup',
+        'name': 'Ayurveda Wellness Co.',
+        'mission': 'Bringing ancient wellness to modern India',
+        'tone': ['vulnerable', 'educational', 'warm'],
+        'esg_posts': [
+            {'text': 'Morning rituals that changed my life...', 'ers': 85},
+            # ... 50 more posts
+        ]
+    },
+    # ... 2 more brands
+]
+```
+
+### 5. Prepare for "What If" Questions
+Judges will ask:
+- **"What if Claude times out?"** → Show retry logic + graceful error handling
+- **"What if a brand has no data?"** → Show cold-start bootstrap from archetype
+- **"How do you prevent toxic content?"** → Show Comprehend integration + banned words
+- **"How does this scale?"** → Show DynamoDB on-demand + Lambda auto-scaling
+
+### 6. Create a Killer Demo Script
+**3-Minute Demo Flow**:
+1. (30s) Show problem: Generic AI content vs. emotionally resonant content
+2. (60s) Upload brand's historical posts → ESG builds → Show EPM visualization
+3. (60s) Generate 3 ideas → Pick one → Generate full post → Show Emotional Aligner score (75/100)
+4. (30s) Show reference posts (explainability) → Apply rewrite suggestion → Score jumps to 88/100
+
+### 7. Monitor Costs Obsessively
+**Set up billing alarm on Day 1**:
+```bash
+aws cloudwatch put-metric-alarm \
+  --alarm-name hackathon-budget-alert \
+  --alarm-description "Alert if costs exceed $20" \
+  --metric-name EstimatedCharges \
+  --namespace AWS/Billing \
+  --statistic Maximum \
+  --period 21600 \
+  --evaluation-periods 1 \
+  --threshold 20 \
+  --comparison-operator GreaterThanThreshold \
+  --alarm-actions arn:aws:sns:us-east-1:ACCOUNT:billing-alerts
+```
+
+### 8. Have a Backup Plan
+**If AWS fails during demo**:
+- Keep local prototype running (Flask + ChromaDB)
+- Record a video demo as backup
+- Have screenshots of key screens
 
 ---
 

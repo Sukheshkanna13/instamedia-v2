@@ -325,9 +325,15 @@ def analyze_draft():
     if not draft or len(draft) < 10:
         return jsonify({"error": "Draft too short"}), 400
     
-    # 🚨 NEW: Check if DB is empty and return a clear error
+    # Check if DB is empty and provide helpful message
     if collection.count() == 0:
-        return jsonify({"error": "Memory is empty. Please run the Seed API first to load historical posts."}), 400
+        return jsonify({
+            "success": False,
+            "error": "database_empty",
+            "message": "Your brand memory is being initialized. Please try again in a moment.",
+            "action": "Please refresh the page or click 'Seed Database' in settings.",
+            "technical_detail": "ChromaDB collection is empty. Run /api/seed to load historical posts."
+        }), 503  # Service Unavailable (temporary)
 
     start = time.time()
 
@@ -614,6 +620,31 @@ def get_posts():
 
 
 if __name__ == "__main__":
+    # Auto-seed database if empty
+    if collection.count() == 0:
+        csv_path = os.path.join(os.path.dirname(__file__), "../data/brand_posts.csv")
+        if os.path.exists(csv_path):
+            print("📊 Auto-seeding database with sample posts...")
+            try:
+                with open(csv_path, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for i, row in enumerate(reader):
+                        post_id = f"post_{i}"
+                        text = row["post_text"].strip()
+                        ers = calculate_ers(int(row.get("likes",0)),
+                                            int(row.get("comments",0)),
+                                            int(row.get("shares",0)))
+                        collection.add(ids=[post_id], embeddings=[embed_text(text)],
+                                      documents=[text], metadatas=[{
+                                          "ers": ers, "likes": int(row.get("likes",0)),
+                                          "comments": int(row.get("comments",0)),
+                                          "shares": int(row.get("shares",0)),
+                                          "platform": row.get("platform","instagram")
+                                      }])
+                print(f"✅ Auto-seeded {collection.count()} posts from CSV")
+            except Exception as e:
+                print(f"⚠️  Auto-seed failed: {e}")
+    
     print(f"\n🚀 InstaMedia AI v2 Backend")
     print(f"   LLM: {LLM_PROVIDER} | ChromaDB: {collection.count()} posts | Supabase: {supabase is not None}\n")
     app.run(debug=True, port=5001)

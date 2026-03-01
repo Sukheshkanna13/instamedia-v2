@@ -1,0 +1,148 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                    InstaMedia AI - Quick Start Guide                        ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📋 STEP 1: Get Your API Key (2 minutes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Choose ONE:
+
+  Option A - Gemini (Recommended)
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ 1. Go to: https://aistudio.google.com/app/apikey                      │
+  │ 2. Sign in with Google                                                 │
+  │ 3. Click "Create API Key"                                              │
+  │ 4. Copy the key (starts with "AIzaSy...")                             │
+  │                                                                        │
+  │ Free Tier: 15 requests/min, 1M tokens/day                             │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  Option B - Groq (Alternative)
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ 1. Go to: https://console.groq.com                                    │
+  │ 2. Sign up for free account                                           │
+  │ 3. Navigate to API Keys                                               │
+  │ 4. Create new key (starts with "gsk_...")                             │
+  │                                                                        │
+  │ Free Tier: Fast inference with Llama models                           │
+  └────────────────────────────────────────────────────────────────────────┘
+
+
+📝 STEP 2: Add API Key (1 minute)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Choose ONE method:
+
+  Method A - Interactive (Easiest)
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ $ cd backend                                                           │
+  │ $ python setup_keys.py                                                 │
+  │                                                                        │
+  │ Follow the prompts to add your key                                    │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  Method B - Manual (Quick)
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ 1. Open: backend/.env                                                  │
+  │ 2. Find line: GEMINI_API_KEY=your_gemini_key_here                     │
+  │ 3. Replace with: GEMINI_API_KEY=AIzaSy...your_actual_key              │
+  │ 4. Save file                                                           │
+  └────────────────────────────────────────────────────────────────────────┘
+
+
+✅ STEP 3: Verify Setup (30 seconds)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ $ cd backend                                                           │
+  │ $ python verify_setup.py                                               │
+  │                                                                        │
+  │ Expected output:                                                       │
+  │ ✅ LLM Provider: Set to 'gemini'                                       │
+  │ ✅ Gemini API Key: Configured (AIzaSy...xxxx)                          │
+  │ ✅ Configuration Complete!                                             │
+  └────────────────────────────────────────────────────────────────────────┘
+
+
+🚀 STEP 4: Start the App (1 minute)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Terminal 1 - Backend
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ $ cd backend                                                           │
+  │ $ source venv/bin/activate                                             │
+  │ $ python app.py                                                        │
+  │                                                                        │
+  │ ✅ Running on http://127.0.0.1:5001                                    │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  Terminal 2 - Frontend
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ $ cd frontend                                                          │
+  │ $ npm run dev                                                          │
+  │                                                                        │
+  │ ✅ Local: http://localhost:3000                                        │
+  └────────────────────────────────────────────────────────────────────────┘
+
+
+🎯 STEP 5: Test It Works (1 minute)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ 1. Open browser: http://localhost:3000                                 │
+  │ 2. Click "Content Ideation" in sidebar                                 │
+  │ 3. Click "Generate Ideas" button                                       │
+  │ 4. See AI-generated content ideas! ✨                                  │
+  └────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                         🎉 You're All Set! 🎉                               ║
+║                                                                              ║
+║  Total Time: ~5 minutes                                                      ║
+║  Cost: $0 (using free tier)                                                  ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+
+📚 Need Help?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Detailed Guide:     backend/API_KEYS_SETUP.md
+  Backend README:     backend/README.md
+  Project Status:     STATUS.md
+  Setup Complete:     SETUP_COMPLETE.md
+
+  Troubleshooting:    Run 'python verify_setup.py'
+
+
+🐛 Common Issues
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Issue: "No LLM API Key found"
+  Fix: Check .env file has actual key (not placeholder)
+
+  Issue: Backend won't start
+  Fix: Activate venv → pip install -r requirements.txt
+
+  Issue: Frontend connection errors
+  Fix: Ensure backend is running on port 5001
+
+
+💡 Pro Tips
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  • Run 'python verify_setup.py' after any changes
+  • Monitor API usage in provider dashboard
+  • Keep .env secure (never commit to git)
+  • Use debug scripts to test endpoints
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                          Happy Building! 🚀                                  ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝

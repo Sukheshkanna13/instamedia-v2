@@ -9,6 +9,20 @@ export interface BrandDNA {
   typography:       string;
   logo_url:         string;
   updated_at?:      string;
+  connected_platforms?: string[]; // NEW: ["instagram", "linkedin", "twitter"]
+}
+
+// ─── AWS S3 Pre-Signed URL (NEW) ─────────────────────────────────────────────
+export interface PresignedUrlResponse {
+  upload_url: string;
+  fields: Record<string, string>;
+  filename: string;
+}
+
+// ─── OAuth Flow (NEW) ─────────────────────────────────────────────────────────
+export interface OAuthInitResponse {
+  auth_url: string;
+  state: string;
 }
 
 // ─── ESG / Emotional Scoring ─────────────────────────────────────────────────
@@ -136,7 +150,7 @@ export interface AsyncState<T> {
   error:   string | null;
 }
 
-export type Tab = "overview" | "dna" | "ideation" | "studio" | "calendar" | "library";
+export type Tab = "overview" | "dna" | "ideation" | "studio" | "calendar" | "library" | "connections" | "drift" | "coldstart";
 
 export interface NavItem {
   id:    Tab;

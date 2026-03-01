@@ -1,27 +1,85 @@
 import type {
   BrandDNA, AnalyzeResponse, IdeateResponse,
   StudioGenerateResponse, ScheduledPost, DashboardStats,
-  ERSStats, GeneratorResponse
+  ERSStats, GeneratorResponse, PresignedUrlResponse, OAuthInitResponse
 } from "../types";
 
 const BASE = "";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error: string }).error ?? res.statusText);
-  }
-  return res.json() as Promise<T>;
+// API Gateway timeout protection: 28s client-side timeout (1s buffer before 29s gateway timeout)
+const API_TIMEOUT_MS = 28000;
+
+// Retry configuration
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+
+interface RequestOptions extends RequestInit {
+  timeout?: number;
+  retries?: number;
 }
 
-const post = <T>(path: string, body: unknown) =>
-  request<T>(path, { method: "POST", body: JSON.stringify(body) });
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-const get = <T>(path: string) => request<T>(path);
+async function requestWithTimeout<T>(
+  path: string,
+  init?: RequestOptions
+): Promise<T> {
+  const timeout = init?.timeout ?? API_TIMEOUT_MS;
+  const retries = init?.retries ?? 0;
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...init,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      
+      // Check if error suggests retry
+      if (res.status === 503 && retries > 0) {
+        await sleep(RETRY_DELAY_MS);
+        return requestWithTimeout<T>(path, { ...init, retries: retries - 1 });
+      }
+      
+      throw new Error((err as { error: string; retry?: boolean }).error ?? res.statusText);
+    }
+
+    return res.json() as Promise<T>;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    // Handle timeout errors
+    if (error instanceof Error && error.name === 'AbortError') {
+      if (retries > 0) {
+        await sleep(RETRY_DELAY_MS);
+        return requestWithTimeout<T>(path, { ...init, retries: retries - 1 });
+      }
+      throw new Error('Request timed out. The AI is taking longer than expected. Please try again.');
+    }
+    
+    throw error;
+  }
+}
+
+const post = <T>(path: string, body: unknown, options?: RequestOptions) =>
+  requestWithTimeout<T>(path, { 
+    method: "POST", 
+    body: JSON.stringify(body),
+    retries: MAX_RETRIES,
+    ...options 
+  });
+
+const get = <T>(path: string, options?: RequestOptions) => 
+  requestWithTimeout<T>(path, { retries: MAX_RETRIES, ...options });
 
 // ─── API surface ─────────────────────────────────────────────────────────────
 export const api = {
@@ -39,23 +97,59 @@ export const api = {
   saveBrandDNA: (data: Partial<BrandDNA>) =>
     post<{ success: boolean }>("/api/brand-dna", data),
 
-  // ESG Core
+  // ESG Core - with extended timeout for large operations
   analyze: (draft: string, brandId = "default") =>
-    post<AnalyzeResponse>("/api/analyze", { draft, brand_id: brandId }),
+    post<AnalyzeResponse>("/api/analyze", { draft, brand_id: brandId }, { timeout: 25000 }),
 
-  // Ideation
+  // S3 Pre-Signed URL for CSV upload (NEW - bypasses API Gateway 10MB limit)
+  getPresignedUrl: (brandId = "default") =>
+    get<PresignedUrlResponse>(`/api/esg/presigned-url?brand_id=${brandId}`),
+
+  // Upload CSV directly to S3 using pre-signed URL
+  uploadToS3: async (presignedData: PresignedUrlResponse, file: File) => {
+    const formData = new FormData();
+    Object.entries(presignedData.fields).forEach(([key, value]) => {
+      formData.append(key, value);
+    });
+    formData.append('file', file);
+
+    const response = await fetch(presignedData.upload_url, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to upload file to S3');
+    }
+
+    return presignedData.filename;
+  },
+
+  // Trigger ESG ingestion after S3 upload
+  ingestESG: (filename: string, brandId = "default") =>
+    post<{ success: boolean; message: string; status: string }>(
+      "/api/esg/upload", 
+      { filename, brand_id: brandId },
+      { timeout: 25000 } // May trigger async Step Functions for large CSVs
+    ),
+
+  // Ideation - with extended timeout for LLM generation
   ideate: (brandId = "default", focusArea?: string) =>
-    post<IdeateResponse>("/api/ideate", { brand_id: brandId, focus_area: focusArea }),
+    post<IdeateResponse>("/api/ideate", { brand_id: brandId, focus_area: focusArea }, { timeout: 25000 }),
 
-  // Studio
+  // Studio - with extended timeout for LLM generation
   studioGenerate: (params: {
     idea_title: string; idea_hook: string;
     angle: string; platform: string; brand_id?: string;
-  }) => post<StudioGenerateResponse>("/api/studio/generate", params),
+  }) => post<StudioGenerateResponse>("/api/studio/generate", params, { timeout: 25000 }),
 
   // Generator (simple)
   generate: (topic: string) =>
-    post<GeneratorResponse>("/api/generate", { topic }),
+    post<GeneratorResponse>("/api/generate", { topic }, { timeout: 25000 }),
+
+  // OAuth Flow (NEW)
+  initiateOAuth: (platform: 'instagram' | 'linkedin' | 'twitter') =>
+    get<OAuthInitResponse>(`/api/auth/${platform}`),
 
   // Calendar / Posts
   schedulePost: (params: Partial<ScheduledPost>) =>

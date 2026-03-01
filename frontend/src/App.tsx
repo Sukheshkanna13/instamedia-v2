@@ -5,6 +5,9 @@ import BrandDNA       from "./components/modules/BrandDNA";
 import Ideation       from "./components/modules/Ideation";
 import CreativeStudio from "./components/modules/CreativeStudio";
 import Calendar       from "./components/modules/Calendar";
+import Connections    from "./components/modules/Connections";
+import BrandDrift     from "./components/modules/BrandDrift";
+import ColdStart      from "./components/modules/ColdStart";
 
 // ── Sidebar nav config ────────────────────────────────────────────────────────
 const NAV = [
@@ -23,6 +26,13 @@ const NAV = [
   { section: "Publish",
     items: [
       { id: "calendar"  as Tab, label: "Calendar",        icon: "📅" },
+      { id: "connections" as Tab, label: "Connections",   icon: "🔗" },
+    ]
+  },
+  { section: "Intelligence",
+    items: [
+      { id: "drift"     as Tab, label: "Brand Drift",     icon: "📊" },
+      { id: "coldstart" as Tab, label: "Cold Start",      icon: "🎯" },
     ]
   }
 ];
@@ -34,6 +44,9 @@ const PAGE_TITLE: Record<Tab, string> = {
   studio:   "Creative Studio",
   calendar: "Calendar",
   library:  "Post Library",
+  connections: "Platform Connections",
+  drift:    "Brand Drift Detection",
+  coldstart: "Cold Start Bootstrap",
 };
 
 export default function App() {
@@ -48,12 +61,18 @@ export default function App() {
 
   const renderPage = () => {
     switch (tab) {
-      case "overview":  return <Overview />;
-      case "dna":       return <BrandDNA />;
-      case "ideation":  return <Ideation onSelectIdea={handleIdeaSelect} />;
-      case "studio":    return <CreativeStudio selectedIdea={selectedIdea} />;
-      case "calendar":  return <Calendar />;
-      default:          return <Overview />;
+      case "overview":    return <Overview />;
+      case "dna":         return <BrandDNA />;
+      case "ideation":    return <Ideation onSelectIdea={handleIdeaSelect} />;
+      case "studio":      return <CreativeStudio selectedIdea={selectedIdea} />;
+      case "calendar":    return <Calendar />;
+      case "connections": return <Connections />;
+      case "drift":       return <BrandDrift />;
+      case "coldstart":   return <ColdStart onSelect={(id) => {
+        console.log("Bootstrapped with archetype:", id);
+        setTab("overview");
+      }} />;
+      default:            return <Overview />;
     }
   };
 
