@@ -14,6 +14,14 @@ SentenceTransformer = None
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
+# Apify client for web scraping
+try:
+    from apify_client import ApifyClient
+    APIFY_AVAILABLE = True
+except ImportError:
+    APIFY_AVAILABLE = False
+    print("⚠️  apify-client not installed. Web scraping will use mock mode.")
+
 load_dotenv(override=True)
 
 app = Flask(__name__)
@@ -690,27 +698,76 @@ def scrape_posts():
     if not keywords:
         return jsonify({"error": "Keywords required"}), 400
     
-    if not APIFY_API_KEY:
-        # Fallback: Generate mock scraped posts for demo
+    # Check if Apify is configured and available
+    if not APIFY_API_KEY or not APIFY_AVAILABLE:
+        reason = "Apify client not installed" if not APIFY_AVAILABLE else "Apify API key not configured"
         return jsonify({
             "success": True,
-            "message": "Apify not configured. Using mock data for demo.",
+            "message": f"{reason}. Using mock data for demo.",
             "scraped_posts": generate_mock_scraped_posts(keywords, count),
             "added_count": 0,
             "mode": "mock"
         })
     
-    # TODO: Implement actual Apify scraping when API key is available
-    # For now, return mock data
-    scraped_posts = generate_mock_scraped_posts(keywords, count)
-    
-    return jsonify({
-        "success": True,
-        "scraped_posts": scraped_posts,
-        "added_count": 0,
-        "mode": "mock",
-        "message": f"Found {len(scraped_posts)} posts. Review and approve to add to database."
-    })
+    # Real Apify scraping
+    try:
+        apify_client = ApifyClient(APIFY_API_KEY)
+        scraped_posts = []
+        unavailable_platforms = []
+        
+        # Scrape from each platform
+        for platform in platforms:
+            try:
+                if platform in ["linkedin", "twitter"]:
+                    unavailable_platforms.append(platform)
+                    print(f"⚠️  {platform.title()} scraper not available (requires paid plan)")
+                    continue
+                    
+                platform_posts = scrape_platform(apify_client, platform, keywords, count // len(platforms))
+                scraped_posts.extend(platform_posts)
+            except Exception as e:
+                print(f"Error scraping {platform}: {e}")
+                continue
+        
+        if not scraped_posts:
+            # Fallback to mock if scraping failed
+            message = "Scraping failed. "
+            if unavailable_platforms:
+                message += f"{', '.join([p.title() for p in unavailable_platforms])} scrapers not available in free tier. "
+            message += "Using mock data for demo."
+            
+            return jsonify({
+                "success": True,
+                "message": message,
+                "scraped_posts": generate_mock_scraped_posts(keywords, count),
+                "added_count": 0,
+                "mode": "mock",
+                "unavailable_platforms": unavailable_platforms
+            })
+        
+        message = f"Found {len(scraped_posts)} real posts from Instagram."
+        if unavailable_platforms:
+            message += f" Note: {', '.join([p.title() for p in unavailable_platforms])} scrapers require paid Apify plan."
+        
+        return jsonify({
+            "success": True,
+            "scraped_posts": scraped_posts,
+            "added_count": 0,
+            "mode": "live",
+            "message": message,
+            "unavailable_platforms": unavailable_platforms
+        })
+        
+    except Exception as e:
+        print(f"Apify scraping error: {e}")
+        # Fallback to mock data
+        return jsonify({
+            "success": True,
+            "message": f"Scraping error: {str(e)}. Using mock data for demo.",
+            "scraped_posts": generate_mock_scraped_posts(keywords, count),
+            "added_count": 0,
+            "mode": "mock"
+        })
 
 
 @app.route("/api/database/add-posts", methods=["POST"])
@@ -819,6 +876,64 @@ def get_database_stats():
 
 
 # ── HELPER FUNCTIONS ──────────────────────────────────────────────────────────
+
+def scrape_platform(apify_client, platform: str, keywords: str, count: int):
+    """Scrape posts from a specific platform using Apify"""
+    posts = []
+    
+    if platform == "instagram":
+        # Instagram Hashtag Scraper
+        # Actor: apify/instagram-hashtag-scraper
+        run_input = {
+            "hashtags": [keywords.replace(" ", "")],
+            "resultsLimit": count
+        }
+        
+        try:
+            print(f"🔍 Scraping Instagram for #{keywords.replace(' ', '')}...")
+            run = apify_client.actor("apify/instagram-hashtag-scraper").call(run_input=run_input)
+            
+            for item in apify_client.dataset(run["defaultDatasetId"]).iterate_items():
+                caption = item.get("caption", "")
+                if not caption or len(caption) < 10:
+                    continue
+                    
+                posts.append({
+                    "text": caption[:500],  # Limit text length
+                    "likes": item.get("likesCount", 0),
+                    "comments": item.get("commentsCount", 0),
+                    "shares": 0,  # Instagram doesn't provide shares
+                    "platform": "instagram",
+                    "emotion": "Unknown",  # Will be analyzed later
+                    "ers": 0  # Will be calculated later
+                })
+            
+            print(f"✅ Found {len(posts)} Instagram posts")
+        except Exception as e:
+            print(f"❌ Instagram scraping error: {e}")
+    
+    elif platform == "linkedin":
+        # LinkedIn scraping not available in free tier
+        print(f"⚠️  LinkedIn scraper not available in your Apify account")
+        print(f"   → LinkedIn and Twitter scrapers require paid Apify plan")
+        print(f"   → Using Instagram scraper only for now")
+    
+    elif platform == "twitter":
+        # Twitter scraping not available in free tier
+        print(f"⚠️  Twitter scraper not available in your Apify account")
+        print(f"   → LinkedIn and Twitter scrapers require paid Apify plan")
+        print(f"   → Using Instagram scraper only for now")
+    
+    # Calculate ERS and analyze emotion for each post
+    if posts:
+        print(f"🧠 Analyzing emotions for {len(posts)} posts...")
+        for post in posts:
+            post["ers"] = calculate_ers(post["likes"], post["comments"], post["shares"])
+            if post["text"]:
+                post["emotion"] = analyze_post_emotion(post["text"])
+    
+    return posts
+
 
 def generate_mock_scraped_posts(keywords: str, count: int):
     """Generate mock scraped posts for demo purposes"""

@@ -5,3 +5,4 @@ chromadb==0.5.3
 requests==2.32.3
 python-dotenv==1.0.1
 supabase==2.5.0
+apify-client==1.7.1
