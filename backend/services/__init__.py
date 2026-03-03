@@ -1,0 +1,3 @@
+"""
+InstaMedia AI - Services Module
+"""

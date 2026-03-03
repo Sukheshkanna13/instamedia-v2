@@ -87,6 +87,38 @@ export interface StudioGenerateResponse {
   result:  GeneratedPost;
 }
 
+// ─── Multi-Modal Media Generation (Phase 6) ───────────────────────────────────
+export type MediaFormat = "image" | "carousel" | "video";
+
+export interface CarouselSlide {
+  slide_number: number;
+  title:        string;
+  content:      string;
+  image_url?:   string;
+}
+
+export interface VideoScene {
+  scene_number: number;
+  description:  string;
+  duration:     string;
+  image_url?:   string;
+}
+
+export interface GeneratedMedia {
+  format:       MediaFormat;
+  image_url?:   string;                // For single image
+  slides?:      CarouselSlide[];       // For carousel (3-5 slides)
+  storyboard?:  VideoScene[];          // For video (5-8 scenes)
+  caption:      string;
+  hashtags:     string[];
+  generation_time_seconds: number;
+}
+
+export interface MediaGenerateResponse {
+  success: boolean;
+  result:  GeneratedMedia;
+}
+
 // ─── Scheduled Posts / Calendar ───────────────────────────────────────────────
 export type PostStatus = "scheduled" | "published" | "draft";
 export type Platform   = "instagram" | "linkedin" | "twitter" | "tiktok" | "both";

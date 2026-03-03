@@ -18,6 +18,7 @@ export default function BrandDNAVault() {
   const [saved,   setSaved]   = useState(false);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string|null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Tag input states
   const [toneInput,    setToneInput]    = useState("");
@@ -86,6 +87,52 @@ export default function BrandDNAVault() {
       setError((e as Error).message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Invalid file type. Please upload PNG, JPG, SVG, or WebP.');
+      return;
+    }
+
+    // Validate file size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+      setError('File too large. Maximum size is 2MB.');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      formData.append('brand_id', dna.brand_id || 'default');
+
+      const response = await fetch('http://localhost:5001/api/brand-dna/upload-logo', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setDna(prev => ({ ...prev, logo_url: result.logo_url }));
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        setError(result.error || 'Upload failed');
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -284,20 +331,41 @@ export default function BrandDNAVault() {
             </div>
           </div>
 
-          {/* Logo Upload placeholder */}
+          {/* Logo Upload */}
           <div className="card">
             <div className="card-header">
               <div className="section-title">Brand Assets</div>
               <span className="badge badge-sky">Storage</span>
             </div>
 
-            <div className="upload-zone" onClick={() => alert("Connect Supabase Storage to enable logo uploads.")}>
-              <div style={{ fontSize:28, opacity:0.3 }}>🖼</div>
-              <div className="mono-label">Upload Primary Logo</div>
-              <div className="sub-text">PNG, SVG or WebP · Max 2MB</div>
-              <div style={{ fontFamily:"var(--font-mono)", fontSize:9, color:"var(--text-muted)", marginTop:4 }}>
-                Requires Supabase Storage configured
-              </div>
+            <input
+              type="file"
+              id="logo-upload"
+              accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleLogoUpload}
+            />
+
+            <div 
+              className="upload-zone" 
+              onClick={() => document.getElementById('logo-upload')?.click()}
+              style={{ cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1 }}
+            >
+              {uploading ? (
+                <>
+                  <div className="spinner" style={{ width: 28, height: 28 }} />
+                  <div className="mono-label">Uploading...</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize:28, opacity:0.3 }}>🖼</div>
+                  <div className="mono-label">Upload Primary Logo</div>
+                  <div className="sub-text">PNG, JPG, SVG or WebP · Max 2MB</div>
+                  <div style={{ fontFamily:"var(--font-mono)", fontSize:9, color:"var(--text-muted)", marginTop:4 }}>
+                    Click to select file
+                  </div>
+                </>
+              )}
             </div>
 
             {dna.logo_url && (
@@ -305,6 +373,9 @@ export default function BrandDNAVault() {
                             borderRadius:"var(--r)", textAlign:"center" }}>
                 <img src={dna.logo_url} alt="Brand logo"
                   style={{ maxHeight:48, objectFit:"contain", opacity:0.9 }} />
+                <div style={{ fontSize:10, color:"var(--text-dim)", marginTop:4, fontFamily:"var(--font-mono)" }}>
+                  Logo uploaded successfully
+                </div>
               </div>
             )}
           </div>

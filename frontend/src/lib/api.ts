@@ -1,7 +1,8 @@
 import type {
   BrandDNA, AnalyzeResponse, IdeateResponse,
   StudioGenerateResponse, ScheduledPost, DashboardStats,
-  ERSStats, GeneratorResponse, PresignedUrlResponse, OAuthInitResponse
+  ERSStats, GeneratorResponse, PresignedUrlResponse, OAuthInitResponse,
+  MediaGenerateResponse
 } from "../types";
 
 const BASE = "";
@@ -142,6 +143,14 @@ export const api = {
     idea_title: string; idea_hook: string;
     angle: string; platform: string; brand_id?: string;
   }) => post<StudioGenerateResponse>("/api/studio/generate", params, { timeout: 25000 }),
+
+  // Multi-Modal Media Generation (Phase 6) - with extended timeout for image generation
+  generateMedia: (params: {
+    caption: string;
+    hashtags: string[];
+    format: 'image' | 'carousel' | 'video';
+    brand_id?: string;
+  }) => post<MediaGenerateResponse>("/api/studio/generate-media", params, { timeout: 45000 }),
 
   // Generator (simple)
   generate: (topic: string) =>

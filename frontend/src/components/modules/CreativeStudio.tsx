@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
-import type { AnalyzeResponse, GeneratedPost, ContentIdea } from "../../types";
+import type { AnalyzeResponse, GeneratedPost, ContentIdea, MediaFormat, GeneratedMedia } from "../../types";
 import ScoreRing from "../ui/ScoreRing";
 
 const VERDICT_LABEL: Record<string, string> = {
@@ -26,6 +26,12 @@ export default function CreativeStudio({ selectedIdea }: Props) {
   const [schedDate, setSchedDate] = useState("");
   const [error,     setError]     = useState<string|null>(null);
   const [copied,    setCopied]    = useState(false);
+
+  // Phase 6: Multi-Modal Media Generation
+  const [mediaFormat, setMediaFormat] = useState<MediaFormat>("image");
+  const [generatedMedia, setGeneratedMedia] = useState<GeneratedMedia | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [showMediaGenerator, setShowMediaGenerator] = useState(false);
 
   // When parent passes in a selected idea, pre-fill
   useEffect(() => {
@@ -96,6 +102,26 @@ export default function CreativeStudio({ selectedIdea }: Props) {
     await navigator.clipboard.writeText(draft);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleGenerateMedia = async () => {
+    if (!draft.trim()) return;
+    setMediaLoading(true);
+    setError(null);
+    try {
+      const hashtags = generated?.hashtags ?? [];
+      const res = await api.generateMedia({
+        caption: draft,
+        hashtags,
+        format: mediaFormat,
+        brand_id: "default",
+      });
+      setGeneratedMedia(res.result);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setMediaLoading(false);
+    }
   };
 
   const score = analysis?.analysis?.resonance_score ?? 0;
@@ -205,6 +231,211 @@ export default function CreativeStudio({ selectedIdea }: Props) {
             {scheduled && <div className="alert alert-success" style={{ marginTop:10 }}>
               ✓ Post added to calendar.
             </div>}
+          </div>
+
+          {/* Phase 6: Multi-Modal Media Generator */}
+          <div className="card card-accent-teal">
+            <div className="card-header">
+              <div className="section-title">🎨 Media Generator</div>
+              <button 
+                className="copy-btn" 
+                onClick={() => setShowMediaGenerator(!showMediaGenerator)}
+              >
+                {showMediaGenerator ? "▼ Hide" : "▶ Show"}
+              </button>
+            </div>
+
+            {showMediaGenerator && (
+              <div style={{ display:"flex", flexDirection:"column", gap:14, marginTop:12 }}>
+                {/* Format Selection */}
+                <div>
+                  <div className="mono-label" style={{ marginBottom:8 }}>Select Format</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {(["image", "carousel", "video"] as MediaFormat[]).map(format => (
+                      <button
+                        key={format}
+                        className={`btn ${mediaFormat === format ? "btn-primary" : "btn-ghost"}`}
+                        onClick={() => setMediaFormat(format)}
+                        disabled={mediaLoading}
+                        style={{ flex:1, textTransform:"capitalize" }}
+                      >
+                        {format === "image" && "🖼 Image"}
+                        {format === "carousel" && "📱 Carousel"}
+                        {format === "video" && "🎬 Video"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Format Description */}
+                <div style={{ fontSize:12, color:"var(--text-dim)", fontStyle:"italic" }}>
+                  {mediaFormat === "image" && "Generate a single high-quality image (1024x1024) for your post"}
+                  {mediaFormat === "carousel" && "Generate 3-5 slides with cohesive visual storytelling"}
+                  {mediaFormat === "video" && "Generate 5-8 keyframe storyboard for video planning"}
+                </div>
+
+                {/* Generate Button */}
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleGenerateMedia}
+                  disabled={mediaLoading || !draft.trim()}
+                  style={{ width:"100%" }}
+                >
+                  {mediaLoading ? (
+                    <>
+                      <div className="spinner" style={{borderTopColor:"#000"}} />
+                      Generating {mediaFormat}...
+                    </>
+                  ) : (
+                    `✦ Generate ${mediaFormat.charAt(0).toUpperCase() + mediaFormat.slice(1)}`
+                  )}
+                </button>
+
+                {/* Loading State */}
+                {mediaLoading && (
+                  <div className="card card-sm" style={{ background:"rgba(20,184,166,0.05)" }}>
+                    <div style={{ textAlign:"center", padding:"20px 0" }}>
+                      <div className="spinner" style={{ width:32, height:32, margin:"0 auto 12px" }} />
+                      <div className="mono-label">
+                        {mediaFormat === "image" && "Creating image with AWS Bedrock Titan..."}
+                        {mediaFormat === "carousel" && "Generating carousel slides..."}
+                        {mediaFormat === "video" && "Creating video storyboard..."}
+                      </div>
+                      <div style={{ fontSize:11, color:"var(--text-dim)", marginTop:6 }}>
+                        This may take 10-45 seconds
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generated Media Display */}
+                {generatedMedia && !mediaLoading && (
+                  <div className="fade-up">
+                    {/* Single Image */}
+                    {generatedMedia.format === "image" && generatedMedia.image_url && (
+                      <div className="card card-sm">
+                        <div className="mono-label" style={{ marginBottom:10 }}>
+                          Generated Image
+                        </div>
+                        <img 
+                          src={generatedMedia.image_url} 
+                          alt="Generated content"
+                          style={{ 
+                            width:"100%", 
+                            borderRadius:8, 
+                            border:"1px solid var(--border)" 
+                          }}
+                        />
+                        <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                          <a 
+                            href={generatedMedia.image_url} 
+                            download 
+                            className="btn btn-ghost btn-sm"
+                            style={{ flex:1 }}
+                          >
+                            ⬇ Download
+                          </a>
+                          <button 
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => window.open(generatedMedia.image_url, '_blank')}
+                            style={{ flex:1 }}
+                          >
+                            🔍 View Full
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Carousel */}
+                    {generatedMedia.format === "carousel" && generatedMedia.slides && (
+                      <div className="card card-sm">
+                        <div className="mono-label" style={{ marginBottom:10 }}>
+                          Carousel ({generatedMedia.slides.length} slides)
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                          {generatedMedia.slides.map((slide, idx) => (
+                            <div 
+                              key={idx}
+                              style={{ 
+                                padding:12, 
+                                border:"1px solid var(--border)", 
+                                borderRadius:8,
+                                background:"rgba(255,255,255,0.02)"
+                              }}
+                            >
+                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                                <span className="badge badge-teal">Slide {slide.slide_number}</span>
+                                <span style={{ fontWeight:600, fontSize:13 }}>{slide.title}</span>
+                              </div>
+                              <p style={{ fontSize:12, color:"var(--text-dim)", marginBottom:10 }}>
+                                {slide.content}
+                              </p>
+                              {slide.image_url && (
+                                <img 
+                                  src={slide.image_url} 
+                                  alt={`Slide ${slide.slide_number}`}
+                                  style={{ 
+                                    width:"100%", 
+                                    borderRadius:6, 
+                                    border:"1px solid var(--border)" 
+                                  }}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Video Storyboard */}
+                    {generatedMedia.format === "video" && generatedMedia.storyboard && (
+                      <div className="card card-sm">
+                        <div className="mono-label" style={{ marginBottom:10 }}>
+                          Video Storyboard ({generatedMedia.storyboard.length} scenes)
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                          {generatedMedia.storyboard.map((scene, idx) => (
+                            <div 
+                              key={idx}
+                              style={{ 
+                                padding:12, 
+                                border:"1px solid var(--border)", 
+                                borderRadius:8,
+                                background:"rgba(255,255,255,0.02)"
+                              }}
+                            >
+                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                                <span className="badge badge-violet">Scene {scene.scene_number}</span>
+                                <span className="badge badge-sky">{scene.duration}</span>
+                              </div>
+                              <p style={{ fontSize:12, color:"var(--text-dim)", marginBottom:10 }}>
+                                {scene.description}
+                              </p>
+                              {scene.image_url && (
+                                <img 
+                                  src={scene.image_url} 
+                                  alt={`Scene ${scene.scene_number}`}
+                                  style={{ 
+                                    width:"100%", 
+                                    borderRadius:6, 
+                                    border:"1px solid var(--border)" 
+                                  }}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generation Stats */}
+                    <div style={{ fontSize:11, color:"var(--text-dim)", textAlign:"center" }}>
+                      Generated in {generatedMedia.generation_time_seconds.toFixed(1)}s
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

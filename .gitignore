@@ -100,6 +100,10 @@ coverage/
 htmlcov/
 .tox/
 .nox/
+test-results/
+playwright-report/
+test_chromadb/
+.vitest/
 
 # ─── Temporary Files ────────────────────────────────────────────────────────
 *.tmp
