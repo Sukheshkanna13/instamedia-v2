@@ -362,8 +362,13 @@ def create_aws_image_generator() -> Optional[AWSImageGenerator]:
     """
     aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    # Always use us-east-1 for Bedrock Titan Image Generator
     aws_region = os.getenv("AWS_REGION", "us-east-1")
     bedrock_region = os.getenv("BEDROCK_REGION", "us-east-1")
+    
+    # Overwrite bedrock region explicitly to us-east-1 to prevent "eu-north-1 is wrong" error
+    bedrock_region = "us-east-1"
+    
     bedrock_model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.titan-image-generator-v2:0")
     s3_bucket_name = os.getenv("S3_BUCKET_NAME")
     s3_region = os.getenv("S3_REGION", aws_region)

@@ -29,7 +29,7 @@ async function requestWithTimeout<T>(
 ): Promise<T> {
   const timeout = init?.timeout ?? API_TIMEOUT_MS;
   const retries = init?.retries ?? 0;
-  
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -44,20 +44,20 @@ async function requestWithTimeout<T>(
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      
+
       // Check if error suggests retry
       if (res.status === 503 && retries > 0) {
         await sleep(RETRY_DELAY_MS);
         return requestWithTimeout<T>(path, { ...init, retries: retries - 1 });
       }
-      
+
       throw new Error((err as { error: string; retry?: boolean }).error ?? res.statusText);
     }
 
     return res.json() as Promise<T>;
   } catch (error) {
     clearTimeout(timeoutId);
-    
+
     // Handle timeout errors
     if (error instanceof Error && error.name === 'AbortError') {
       if (retries > 0) {
@@ -66,20 +66,20 @@ async function requestWithTimeout<T>(
       }
       throw new Error('Request timed out. The AI is taking longer than expected. Please try again.');
     }
-    
+
     throw error;
   }
 }
 
 const post = <T>(path: string, body: unknown, options?: RequestOptions) =>
-  requestWithTimeout<T>(path, { 
-    method: "POST", 
+  requestWithTimeout<T>(path, {
+    method: "POST",
     body: JSON.stringify(body),
     retries: MAX_RETRIES,
-    ...options 
+    ...options
   });
 
-const get = <T>(path: string, options?: RequestOptions) => 
+const get = <T>(path: string, options?: RequestOptions) =>
   requestWithTimeout<T>(path, { retries: MAX_RETRIES, ...options });
 
 // ─── API surface ─────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ export const api = {
   // Trigger ESG ingestion after S3 upload
   ingestESG: (filename: string, brandId = "default") =>
     post<{ success: boolean; message: string; status: string }>(
-      "/api/esg/upload", 
+      "/api/esg/upload",
       { filename, brand_id: brandId },
       { timeout: 25000 } // May trigger async Step Functions for large CSVs
     ),
@@ -163,6 +163,12 @@ export const api = {
   // Calendar / Posts
   schedulePost: (params: Partial<ScheduledPost>) =>
     post<{ success: boolean; post: ScheduledPost }>("/api/posts/schedule", params),
+
+  deletePost: (postId: string, brandId = "default") =>
+    requestWithTimeout<{ success: boolean; message: string }>(`/api/posts/${postId}?brand_id=${brandId}`, { method: "DELETE" }),
+
+  reschedulePost: (postId: string, newTime: string, brandId = "default") =>
+    requestWithTimeout<{ success: boolean; post: ScheduledPost }>(`/api/posts/${postId}/reschedule`, { method: "PUT", body: JSON.stringify({ scheduled_time: newTime, brand_id: brandId }) }),
 
   getCalendarPosts: (brandId = "default") =>
     get<{ success: boolean; posts: ScheduledPost[] }>(`/api/posts/calendar?brand_id=${brandId}`),

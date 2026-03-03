@@ -169,11 +169,17 @@ def parse_llm_json(raw: str) -> dict:
     """Safely parse JSON from LLM response, stripping markdown fences."""
     import re
     clean = raw.strip()
-    # Use regex to find the first JSON block: ```json ... ``` or just ``` ... ```
+    
+    # Try capturing anything between { and } as a fallback
     match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", clean)
     if match:
         clean = match.group(1)
-    
+    else:
+        # Fallback to general JSON boundary extraction
+        match = re.search(r"(\{[\s\S]*\})", clean)
+        if match:
+            clean = match.group(1)
+            
     try:
         return json.loads(clean)
     except json.JSONDecodeError:
@@ -427,6 +433,11 @@ Generate exactly 5 content ideas for social media. Return ONLY valid JSON:
 
     raw = call_llm(prompt)
     result = parse_llm_json(raw)
+    
+    # 🚨 Catch LLM errors
+    if "error" in result:
+        return jsonify({"success": False, "error": f"LLM Ideation Failed: {result.get('raw', 'Unknown LLM Error')}"}), 500
+        
     return jsonify({"success": True, "result": result})
 
 
@@ -829,6 +840,53 @@ def get_recent_posts():
     posts = _local_posts[-limit:] if _local_posts else []
     return jsonify({"success": True, "posts": posts[::-1]})
 
+
+@app.route("/api/posts/<post_id>", methods=["DELETE"])
+def delete_post(post_id):
+    """Delete a scheduled post."""
+    brand_id = request.args.get("brand_id", "default")
+    
+    if supabase:
+        try:
+            res = supabase.table("scheduled_posts").delete().eq("id", post_id).eq("brand_id", brand_id).execute()
+            if not res.data:
+                return jsonify({"error": "Post not found or unauthorized"}), 404
+            return jsonify({"success": True, "message": "Post deleted from calendar"})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        global _local_posts
+        initial_len = len(_local_posts)
+        _local_posts = [p for p in _local_posts if p.get("id") != post_id]
+        if len(_local_posts) == initial_len:
+            return jsonify({"error": "Post not found"}), 404
+        return jsonify({"success": True, "message": "Post deleted from calendar"})
+
+
+@app.route("/api/posts/<post_id>/reschedule", methods=["PUT"])
+def reschedule_post(post_id):
+    """Reschedule an existing post."""
+    data = request.get_json()
+    new_time = data.get("scheduled_time")
+    brand_id = data.get("brand_id", "default")
+    
+    if not new_time:
+        return jsonify({"error": "New scheduled_time is required"}), 400
+
+    if supabase:
+        try:
+            res = supabase.table("scheduled_posts").update({"scheduled_time": new_time}).eq("id", post_id).eq("brand_id", brand_id).execute()
+            if not res.data:
+                return jsonify({"error": "Post not found or unauthorized"}), 404
+            return jsonify({"success": True, "post": res.data[0]})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        for p in _local_posts:
+            if p.get("id") == post_id:
+                p["scheduled_time"] = new_time
+                return jsonify({"success": True, "post": p})
+        return jsonify({"error": "Post not found"}), 404
 
 @app.route("/api/posts/stats", methods=["GET"])
 def get_post_stats():
@@ -1389,4 +1447,4 @@ if __name__ == "__main__":
     
     print(f"\n🚀 InstaMedia AI v2 Backend")
     print(f"   LLM: {LLM_PROVIDER} | ChromaDB: {collection.count()} posts | Supabase: {supabase is not None}\n")
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=8000)
