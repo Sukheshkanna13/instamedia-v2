@@ -120,10 +120,10 @@ export default function Calendar() {
         ))}
       </div>
 
-      <div className="grid-2" style={{ gap: 20, alignItems: "start" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
 
         {/* ── CALENDAR GRID ── */}
-        <div className="card" style={{ padding: 20 }}>
+        <div className="card" style={{ padding: 20, flex: "1.5 1 500px", minWidth: 0 }}>
           {/* Month nav */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <button className="btn-icon" onClick={prevMonth}>‹</button>
@@ -174,7 +174,7 @@ export default function Calendar() {
         </div>
 
         {/* ── DAY DETAIL / POST LIST ── */}
-        <div>
+        <div style={{ flex: "1 1 350px", minWidth: 0 }}>
           {selectedDay && (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="card-header">
