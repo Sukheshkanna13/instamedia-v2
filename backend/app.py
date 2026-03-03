@@ -14,6 +14,15 @@ SentenceTransformer = None
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
+# Error tracking
+from monitoring.error_tracker import (
+    track_error,
+    track_supabase_error,
+    track_aws_error,
+    track_api_error,
+    ErrorSeverity
+)
+
 # Apify client for web scraping
 try:
     from apify_client import ApifyClient
@@ -249,69 +258,91 @@ def upload_logo():
     Accepts: multipart/form-data with 'logo' file and 'brand_id'
     Returns: { success: bool, logo_url: str }
     """
-    if 'logo' not in request.files:
-        return jsonify({"error": "No logo file provided"}), 400
-    
-    file = request.files['logo']
     brand_id = request.form.get('brand_id', 'default')
     
-    if file.filename == '':
-        return jsonify({"error": "Empty filename"}), 400
-    
-    # Validate file type
-    allowed_extensions = {'png', 'jpg', 'jpeg', 'svg', 'webp'}
-    file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-    
-    if file_ext not in allowed_extensions:
-        return jsonify({"error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"}), 400
-    
-    if not supabase:
-        return jsonify({"error": "Supabase not configured. Logo upload requires Supabase Storage."}), 503
-    
     try:
-        # Generate unique filename
-        unique_filename = f"{brand_id}_{int(time.time())}.{file_ext}"
-        file_path = f"{unique_filename}"
+        if 'logo' not in request.files:
+            return jsonify({"error": "No logo file provided"}), 400
         
-        # Read file content
-        file_content = file.read()
+        file = request.files['logo']
         
-        # Upload to Supabase Storage
-        # First, try to create bucket if it doesn't exist (will fail silently if exists)
+        if file.filename == '':
+            return jsonify({"error": "Empty filename"}), 400
+        
+        # Validate file type
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'svg', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({"error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"}), 400
+        
+        if not supabase:
+            return jsonify({"error": "Supabase not configured. Logo upload requires Supabase Storage."}), 503
+        
         try:
-            supabase.storage.create_bucket('brand-logos', {'public': True})
-        except:
-            pass  # Bucket likely already exists
-        
-        # Upload file
-        storage_response = supabase.storage.from_('brand-logos').upload(
-            path=file_path,
-            file=file_content,
-            file_options={"content-type": file.content_type, "upsert": "true"}
-        )
-        
-        # Get public URL
-        public_url = supabase.storage.from_('brand-logos').get_public_url(file_path)
-        
-        # Update brand_dna table with logo_url
-        try:
-            supabase.table("brand_dna").update({
+            # Generate unique filename
+            unique_filename = f"{brand_id}_{int(time.time())}.{file_ext}"
+            file_path = f"{unique_filename}"
+            
+            # Read file content
+            file_content = file.read()
+            
+            # Get bucket name from env
+            bucket_name = os.getenv('SUPABASE_BUCKET_NAME', 'brand-assets')
+            
+            # Upload to Supabase Storage
+            # First, try to create bucket if it doesn't exist (will fail silently if exists)
+            try:
+                supabase.storage.create_bucket(bucket_name, {'public': True})
+            except:
+                pass  # Bucket likely already exists
+            
+            # Upload file
+            storage_response = supabase.storage.from_(bucket_name).upload(
+                path=file_path,
+                file=file_content,
+                file_options={"content-type": file.content_type, "upsert": "true"}
+            )
+            
+            # Get public URL
+            public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
+            
+            # Update brand_dna table with logo_url
+            try:
+                supabase.table("brand_dna").update({
+                    "logo_url": public_url,
+                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                }).eq("brand_id", brand_id).execute()
+            except:
+                # If update fails, brand_dna record might not exist yet
+                # That's okay, it will be created when they save Brand DNA
+                pass
+            
+            return jsonify({
+                "success": True,
                 "logo_url": public_url,
-                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-            }).eq("brand_id", brand_id).execute()
-        except:
-            # If update fails, brand_dna record might not exist yet
-            # That's okay, it will be created when they save Brand DNA
-            pass
-        
-        return jsonify({
-            "success": True,
-            "logo_url": public_url,
-            "message": "Logo uploaded successfully"
-        })
-        
+                "message": "Logo uploaded successfully"
+            })
+            
+        except Exception as storage_error:
+            # Track Supabase-specific error (catches bucket not found)
+            track_supabase_error(
+                storage_error,
+                operation='upload',
+                bucket_name=bucket_name,
+                file_name=file_path,
+                supabase_url=SUPABASE_URL
+            )
+            return jsonify({"error": f"Upload failed: {str(storage_error)}"}), 500
+    
     except Exception as e:
-        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+        # Track general error
+        track_error(e, context={
+            'module': 'brand_asset_upload',
+            'endpoint': '/api/brand-dna/upload-logo',
+            'brand_id': brand_id
+        })
+        return jsonify({"error": "Upload failed"}), 500
 
 
 @app.route("/api/brand-dna/scrape-website", methods=["POST"])
@@ -358,46 +389,47 @@ def ideate():
     brand_id = data.get("brand_id", "default")
     focus = data.get("focus_area", "general brand storytelling")
 
-    # Pull brand DNA
-    brand_dna = _local_brand_dna.get(brand_id, {})
-    if supabase:
-        try:
-            res = supabase.table("brand_dna").select("*").eq("brand_id", brand_id).execute()
-            if res.data:
-                brand_dna = res.data[0]
-        except:
-            pass
+    try:
+        # Pull brand DNA
+        brand_dna = _local_brand_dna.get(brand_id, {})
+        if supabase:
+            try:
+                res = supabase.table("brand_dna").select("*").eq("brand_id", brand_id).execute()
+                if res.data:
+                    brand_dna = res.data[0]
+            except:
+                pass
 
-    # NEW: Use ChromaDB optimizer to get high-ERS winners only
-    top_posts = []
-    if collection.count() > 0:
-        optimizer = ChromaDBOptimizer(collection)
-        
-        # Query winners only (top 20% by ERS)
-        result = optimizer.query_winners_only(limit=5)
-        
-        if result["success"] and result["results"].get("documents"):
-            top_posts = result["results"]["documents"]
+        # NEW: Use ChromaDB optimizer to get high-ERS winners only
+        top_posts = []
+        if collection.count() > 0:
+            optimizer = ChromaDBOptimizer(collection)
             
-            # Log performance
-            print(f"✨ Retrieved {len(top_posts)} winner posts in {result['query_time_ms']}ms")
-        else:
-            # Fallback to old method if optimizer fails
-            all_p = collection.get(include=["documents","metadatas"])
-            sorted_p = sorted(zip(all_p["documents"], all_p["metadatas"]),
-                             key=lambda x: x[1].get("ers", 0), reverse=True)
-            top_posts = [p[0] for p in sorted_p[:5]]
+            # Query winners only (top 20% by ERS)
+            result = optimizer.query_winners_only(limit=5)
+            
+            if result["success"] and result["results"].get("documents"):
+                top_posts = result["results"]["documents"]
+                
+                # Log performance
+                print(f"✨ Retrieved {len(top_posts)} winner posts in {result['query_time_ms']}ms")
+            else:
+                # Fallback to old method if optimizer fails
+                all_p = collection.get(include=["documents","metadatas"])
+                sorted_p = sorted(zip(all_p["documents"], all_p["metadatas"]),
+                                 key=lambda x: x[1].get("ers", 0), reverse=True)
+                top_posts = [p[0] for p in sorted_p[:5]]
 
-    # Get brand context from scraped website data (RAG)
-    brand_context = get_brand_context(brand_id, focus, collection)
+        # Get brand context from scraped website data (RAG)
+        brand_context = get_brand_context(brand_id, focus, collection)
 
-    mission = brand_dna.get("mission", "")
-    tone = brand_dna.get("tone_descriptors", "[]")
-    banned = brand_dna.get("banned_words", "[]")
+        mission = brand_dna.get("mission", "")
+        tone = brand_dna.get("tone_descriptors", "[]")
+        banned = brand_dna.get("banned_words", "[]")
 
-    posts_text = "\n".join([f"- {p[:100]}" for p in top_posts])
+        posts_text = "\n".join([f"- {p[:100]}" for p in top_posts])
 
-    prompt = f"""You are a creative strategist for a brand.
+        prompt = f"""You are a creative strategist for a brand.
 
 Brand Mission: {mission or "Not set"}
 Brand Tone: {tone}
@@ -425,9 +457,49 @@ Generate exactly 5 content ideas for social media. Return ONLY valid JSON:
   ]
 }}"""
 
-    raw = call_llm(prompt)
-    result = parse_llm_json(raw)
-    return jsonify({"success": True, "result": result})
+        try:
+            raw = call_llm(prompt)
+            result = parse_llm_json(raw)
+            
+            # Check if result is empty or has error
+            if "error" in result or not result.get("ideas"):
+                track_api_error(
+                    Exception("No ideas generated or LLM parsing failed"),
+                    endpoint='/api/ideate',
+                    method='POST',
+                    status_code=500,
+                    query_params={'focus': focus[:100], 'brand_id': brand_id}
+                )
+                return jsonify({
+                    "success": False,
+                    "error": "Failed to generate ideas. Please try again."
+                }), 500
+            
+            return jsonify({"success": True, "result": result})
+            
+        except Exception as llm_error:
+            track_api_error(
+                llm_error,
+                endpoint='/api/ideate',
+                method='POST',
+                status_code=500,
+                query_params={'focus': focus[:100], 'brand_id': brand_id}
+            )
+            return jsonify({
+                "success": False,
+                "error": "Ideation failed. Please try again."
+            }), 500
+    
+    except Exception as e:
+        track_error(e, context={
+            'module': 'content_ideation',
+            'endpoint': '/api/ideate',
+            'brand_id': brand_id
+        })
+        return jsonify({
+            "success": False,
+            "error": "Request failed"
+        }), 500
 
 
 # ── CREATIVE STUDIO ───────────────────────────────────────────────────────────
@@ -449,56 +521,57 @@ def studio_generate():
     platform = data.get("platform", "Instagram")
     brand_id = data.get("brand_id", "default")
 
-    # Pull brand DNA
-    brand_dna = _local_brand_dna.get(brand_id, {})
-    if supabase:
-        try:
-            res = supabase.table("brand_dna").select("*").eq("brand_id", brand_id).execute()
-            if res.data:
-                brand_dna = res.data[0]
-        except:
-            pass
+    try:
+        # Pull brand DNA
+        brand_dna = _local_brand_dna.get(brand_id, {})
+        if supabase:
+            try:
+                res = supabase.table("brand_dna").select("*").eq("brand_id", brand_id).execute()
+                if res.data:
+                    brand_dna = res.data[0]
+            except:
+                pass
 
-    # NEW: Use ChromaDB optimizer to get high-ERS winners only
-    top_posts = []
-    winner_stats = {}
-    if collection.count() > 0:
-        optimizer = ChromaDBOptimizer(collection)
-        
-        # Query winners only (top 20% by ERS)
-        result = optimizer.query_winners_only(limit=3)
-        
-        if result["success"] and result["results"].get("documents"):
-            top_posts = result["results"]["documents"]
-            metadatas = result["results"]["metadatas"]
+        # NEW: Use ChromaDB optimizer to get high-ERS winners only
+        top_posts = []
+        winner_stats = {}
+        if collection.count() > 0:
+            optimizer = ChromaDBOptimizer(collection)
             
-            # Calculate winner stats
-            if metadatas:
-                avg_ers = sum(m.get("ers", 0) for m in metadatas) / len(metadatas)
-                winner_stats = {
-                    "count": len(top_posts),
-                    "avg_ers": round(avg_ers, 1)
-                }
+            # Query winners only (top 20% by ERS)
+            result = optimizer.query_winners_only(limit=3)
             
-            print(f"✨ Retrieved {len(top_posts)} winner posts in {result['query_time_ms']}ms")
-        else:
-            # Fallback to old method
-            all_p = collection.get(include=["documents","metadatas"])
-            sorted_p = sorted(zip(all_p["documents"], all_p["metadatas"]),
-                             key=lambda x: x[1].get("ers", 0), reverse=True)
-            top_posts = [p[0] for p in sorted_p[:3]]
+            if result["success"] and result["results"].get("documents"):
+                top_posts = result["results"]["documents"]
+                metadatas = result["results"]["metadatas"]
+                
+                # Calculate winner stats
+                if metadatas:
+                    avg_ers = sum(m.get("ers", 0) for m in metadatas) / len(metadatas)
+                    winner_stats = {
+                        "count": len(top_posts),
+                        "avg_ers": round(avg_ers, 1)
+                    }
+                
+                print(f"✨ Retrieved {len(top_posts)} winner posts in {result['query_time_ms']}ms")
+            else:
+                # Fallback to old method
+                all_p = collection.get(include=["documents","metadatas"])
+                sorted_p = sorted(zip(all_p["documents"], all_p["metadatas"]),
+                                 key=lambda x: x[1].get("ers", 0), reverse=True)
+                top_posts = [p[0] for p in sorted_p[:3]]
 
-    # Get brand context from scraped website data (RAG)
-    brand_context = get_brand_context(brand_id, idea, collection)
+        # Get brand context from scraped website data (RAG)
+        brand_context = get_brand_context(brand_id, idea, collection)
 
-    mission = brand_dna.get("mission", "")
-    tone = brand_dna.get("tone_descriptors", "[]")
-    banned = brand_dna.get("banned_words", "[]")
-    
-    # Enhanced posts context with winner emphasis
-    posts_context = "\n".join([f"🏆 WINNER POST (Top 20%): {p[:150]}" for p in top_posts])
+        mission = brand_dna.get("mission", "")
+        tone = brand_dna.get("tone_descriptors", "[]")
+        banned = brand_dna.get("banned_words", "[]")
+        
+        # Enhanced posts context with winner emphasis
+        posts_context = "\n".join([f"🏆 WINNER POST (Top 20%): {p[:150]}" for p in top_posts])
 
-    prompt = f"""You are a brand copywriter. Write a social media post.
+        prompt = f"""You are a brand copywriter. Write a social media post.
 
 Idea: {idea}
 Opening hook: {hook}
@@ -530,9 +603,50 @@ Return ONLY valid JSON:
   "word_count": <integer>
 }}"""
 
-    raw = call_llm(prompt)
-    result = parse_llm_json(raw)
-    return jsonify({"success": True, "result": result})
+        try:
+            raw = call_llm(prompt)
+            result = parse_llm_json(raw)
+            
+            # Check if result is empty or has error
+            if "error" in result or not result.get("post_text"):
+                track_error(
+                    Exception("Generate post produced no output or parsing failed"),
+                    context={
+                        'module': 'creative_studio',
+                        'operation': 'generate_post',
+                        'endpoint': '/api/studio/generate',
+                        'input_data': {'idea': idea, 'hook': hook, 'angle': angle}
+                    },
+                    severity=ErrorSeverity.WARNING
+                )
+                return jsonify({
+                    "success": False,
+                    "error": "No content generated. Please try again."
+                }), 500
+            
+            return jsonify({"success": True, "result": result})
+            
+        except Exception as gen_error:
+            track_error(gen_error, context={
+                'module': 'creative_studio',
+                'operation': 'generate_post',
+                'endpoint': '/api/studio/generate'
+            })
+            return jsonify({
+                "success": False,
+                "error": "Generation failed. Please try again."
+            }), 500
+    
+    except Exception as e:
+        track_error(e, context={
+            'module': 'creative_studio',
+            'endpoint': '/api/studio/generate',
+            'brand_id': brand_id
+        })
+        return jsonify({
+            "success": False,
+            "error": "Request failed"
+        }), 500
 
 
 # ── MULTI-MODAL MEDIA GENERATION (Phase 6) ────────────────────────────────────
@@ -577,87 +691,113 @@ def generate_media():
     brand_id = data.get("brand_id", "default")
     generate_images = data.get("generate_images", True)  # Allow disabling for testing
     
-    # Validation
-    if not caption:
-        return jsonify({"success": False, "error": "Caption is required"}), 400
-    
-    if format_type not in ["image", "carousel", "video"]:
-        return jsonify({"success": False, "error": f"Invalid format: {format_type}"}), 400
-    
-    # Get brand context for better prompts
-    brand_context = ""
     try:
-        brand_context = get_brand_context(brand_id, caption, collection)
-    except Exception as e:
-        print(f"⚠️  Could not fetch brand context: {e}")
-    
-    # Step 1: Generate creative prompts (Translation Layer)
-    media_gen = create_media_generator(call_llm)
-    
-    try:
-        result = media_gen.translate_to_creative_prompt(
-            caption=caption,
-            hashtags=hashtags,
-            format_type=format_type,
-            brand_context=brand_context[:500] if brand_context else ""
-        )
+        # Validation
+        if not caption:
+            return jsonify({"success": False, "error": "Caption is required"}), 400
         
-        print(f"✨ Generated {format_type} prompts")
+        if format_type not in ["image", "carousel", "video"]:
+            return jsonify({"success": False, "error": f"Invalid format: {format_type}"}), 400
         
-        # Step 2: Generate actual images with AWS Bedrock (if enabled)
-        if generate_images:
-            aws_gen = create_aws_image_generator()
+        # Get brand context for better prompts
+        brand_context = ""
+        try:
+            brand_context = get_brand_context(brand_id, caption, collection)
+        except Exception as e:
+            print(f"⚠️  Could not fetch brand context: {e}")
+        
+        # Step 1: Generate creative prompts (Translation Layer)
+        media_gen = create_media_generator(call_llm)
+        
+        try:
+            result = media_gen.translate_to_creative_prompt(
+                caption=caption,
+                hashtags=hashtags,
+                format_type=format_type,
+                brand_context=brand_context[:500] if brand_context else ""
+            )
             
-            if aws_gen is None:
-                print("⚠️  AWS not configured, returning prompts only")
-            else:
-                try:
-                    if format_type == "image":
-                        # Single image generation
-                        prompt = result.get("image_prompt", "")
-                        if prompt:
-                            image_result = aws_gen.generate_and_upload(prompt)
-                            result["image_url"] = image_result["url"]
-                            print(f"✅ Generated image in {image_result['generation_time_seconds']}s")
-                    
-                    elif format_type == "carousel":
-                        # Carousel images (concurrent generation)
-                        slides = result.get("slides", [])
-                        if slides:
-                            image_results = aws_gen.generate_carousel_images(slides)
-                            # Add URLs to slides
-                            for slide, img_result in zip(slides, image_results):
-                                slide["image_url"] = img_result.get("url")
-                            print(f"✅ Generated {len(image_results)} carousel images")
-                    
-                    elif format_type == "video":
-                        # Video storyboard keyframes (concurrent generation)
-                        storyboard = result.get("storyboard", [])
-                        if storyboard:
-                            image_results = aws_gen.generate_storyboard_keyframes(storyboard)
-                            # Add URLs to scenes
-                            for scene, img_result in zip(storyboard, image_results):
-                                scene["image_url"] = img_result.get("url")
-                            print(f"✅ Generated {len(image_results)} storyboard keyframes")
+            print(f"✨ Generated {format_type} prompts")
+            
+            # Step 2: Generate actual images with AWS Bedrock (if enabled)
+            if generate_images:
+                aws_gen = create_aws_image_generator()
                 
-                except Exception as e:
-                    print(f"⚠️  Image generation error: {e}")
-                    # Continue with prompts only
-        
-        # Add metadata
-        result["caption"] = caption
-        result["hashtags"] = hashtags
-        result["generation_time_seconds"] = round(time.time() - start_time, 2)
-        
-        print(f"✨ Completed {format_type} generation in {result['generation_time_seconds']}s")
-        
-        return jsonify({"success": True, "result": result})
-        
+                if aws_gen is None:
+                    print("⚠️  AWS not configured, returning prompts only")
+                else:
+                    try:
+                        if format_type == "image":
+                            # Single image generation
+                            prompt = result.get("image_prompt", "")
+                            if prompt:
+                                image_result = aws_gen.generate_and_upload(prompt)
+                                result["image_url"] = image_result["url"]
+                                print(f"✅ Generated image in {image_result['generation_time_seconds']}s")
+                        
+                        elif format_type == "carousel":
+                            # Carousel images (concurrent generation)
+                            slides = result.get("slides", [])
+                            if slides:
+                                image_results = aws_gen.generate_carousel_images(slides)
+                                # Add URLs to slides
+                                for slide, img_result in zip(slides, image_results):
+                                    slide["image_url"] = img_result.get("url")
+                                print(f"✅ Generated {len(image_results)} carousel images")
+                        
+                        elif format_type == "video":
+                            # Video storyboard keyframes (concurrent generation)
+                            storyboard = result.get("storyboard", [])
+                            if storyboard:
+                                image_results = aws_gen.generate_storyboard_keyframes(storyboard)
+                                # Add URLs to scenes
+                                for scene, img_result in zip(storyboard, image_results):
+                                    scene["image_url"] = img_result.get("url")
+                                print(f"✅ Generated {len(image_results)} storyboard keyframes")
+                    
+                    except Exception as aws_error:
+                        # Track AWS-specific error (catches region mismatch)
+                        aws_region = os.getenv('AWS_REGION', 'us-east-1')
+                        track_aws_error(
+                            aws_error,
+                            service='bedrock',
+                            operation='invoke_model',
+                            region=aws_region,
+                            model_id='amazon.titan-image-generator-v1'
+                        )
+                        print(f"⚠️  Image generation error: {aws_error}")
+                        # Continue with prompts only
+            
+            # Add metadata
+            result["caption"] = caption
+            result["hashtags"] = hashtags
+            result["generation_time_seconds"] = round(time.time() - start_time, 2)
+            
+            print(f"✨ Completed {format_type} generation in {result['generation_time_seconds']}s")
+            
+            return jsonify({"success": True, "result": result})
+            
+        except Exception as gen_error:
+            track_error(gen_error, context={
+                'module': 'media_generator',
+                'operation': 'generate_media',
+                'endpoint': '/api/studio/generate-media',
+                'format_type': format_type
+            })
+            return jsonify({
+                "success": False,
+                "error": "Media generation failed"
+            }), 500
+    
     except Exception as e:
-        print(f"❌ Media generation error: {e}")
+        track_error(e, context={
+            'module': 'media_generator',
+            'endpoint': '/api/studio/generate-media',
+            'brand_id': brand_id
+        })
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": "Request failed"
         }), 500
 
 
@@ -861,6 +1001,34 @@ def get_post_stats():
 
 
 # ── SEED & HEALTH ─────────────────────────────────────────────────────────────
+
+@app.route("/api/track-error", methods=["POST"])
+def track_frontend_error():
+    """Receive and track errors from frontend."""
+    try:
+        data = request.json
+        error_type = data.get('error_type', 'UnknownError')
+        message = data.get('message', 'No message')
+        
+        # Create exception from frontend error
+        exception = Exception(message)
+        
+        context = {
+            'module': 'frontend',
+            'component': data.get('component'),
+            'endpoint': data.get('endpoint'),
+            'stack': data.get('stack'),
+            'user_agent': request.headers.get('User-Agent')
+        }
+        
+        track_error(exception, context=context)
+        
+        return jsonify({"success": True}), 200
+    
+    except Exception as e:
+        print(f"Failed to track frontend error: {e}")
+        return jsonify({"error": "Failed to track error"}), 500
+
 
 @app.route("/api/health", methods=["GET"])
 def health():
