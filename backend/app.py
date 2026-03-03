@@ -52,12 +52,29 @@ embedder = MockEmbedder()
 print("⚠️  Embedding model mocked (Python 3.14 compatibility mode).")
 
 class MockCollection:
-    def __init__(self): self.n = 0
-    def count(self): return self.n
-    def get(self, include=None, ids=None): return {"ids":[], "documents":[], "metadatas":[]}
-    def add(self, ids, embeddings, documents, metadatas): self.n += len(ids)
-    def query(self, query_embeddings, n_results, include):
-        return {"ids":[[]], "documents":[[]], "metadatas":[[]], "distances":[[]]}
+    def __init__(self):
+        self.data = {"ids": [], "embeddings": [], "documents": [], "metadatas": []}
+    def count(self): 
+        return len(self.data["ids"])
+    def get(self, include=None, ids=None): 
+        return {
+            "ids": self.data["ids"],
+            "documents": self.data["documents"],
+            "metadatas": self.data["metadatas"]
+        }
+    def add(self, ids, embeddings, documents, metadatas):
+        self.data["ids"].extend(ids)
+        self.data["embeddings"].extend(embeddings)
+        self.data["documents"].extend(documents)
+        self.data["metadatas"].extend(metadatas)
+    def query(self, query_embeddings, n_results, include, where=None):
+        n = min(n_results, len(self.data["ids"]))
+        return {
+            "ids": [self.data["ids"][:n]],
+            "documents": [self.data["documents"][:n]],
+            "metadatas": [self.data["metadatas"][:n]],
+            "distances": [[0.1] * n]
+        }
 
 collection = MockCollection()
 print("⚠️  ChromaDB mocked (Python 3.14 compatibility mode).")
@@ -1429,6 +1446,8 @@ if __name__ == "__main__":
                 with open(csv_path, "r", encoding="utf-8") as f:
                     reader = csv.DictReader(f)
                     for i, row in enumerate(reader):
+                        import random
+                        emotions = ["Inspirational", "Educational", "Relatable", "Controversial", "Motivational", "Humorous"]
                         post_id = f"post_{i}"
                         text = row["post_text"].strip()
                         ers = calculate_ers(int(row.get("likes",0)),
@@ -1439,7 +1458,9 @@ if __name__ == "__main__":
                                           "ers": ers, "likes": int(row.get("likes",0)),
                                           "comments": int(row.get("comments",0)),
                                           "shares": int(row.get("shares",0)),
-                                          "platform": row.get("platform","instagram")
+                                          "platform": row.get("platform","instagram"),
+                                          "emotion": random.choice(emotions),
+                                          "source": "seed"
                                       }])
                 print(f"✅ Auto-seeded {collection.count()} posts from CSV")
             except Exception as e:
