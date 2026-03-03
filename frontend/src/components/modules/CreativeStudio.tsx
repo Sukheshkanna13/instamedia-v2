@@ -5,9 +5,9 @@ import ScoreRing from "../ui/ScoreRing";
 
 const VERDICT_LABEL: Record<string, string> = {
   STRONG_MATCH: "Strong Match",
-  GOOD_MATCH:   "Good Match",
-  WEAK_MATCH:   "Needs Work",
-  MISMATCH:     "Misaligned",
+  GOOD_MATCH: "Good Match",
+  WEAK_MATCH: "Needs Work",
+  MISMATCH: "Misaligned",
 };
 
 interface Props {
@@ -15,17 +15,17 @@ interface Props {
 }
 
 export default function CreativeStudio({ selectedIdea }: Props) {
-  const [topic,     setTopic]     = useState(selectedIdea?.title ?? "");
-  const [platform,  setPlatform]  = useState<string>(selectedIdea?.platform ?? "Instagram");
-  const [draft,     setDraft]     = useState("");
+  const [topic, setTopic] = useState(selectedIdea?.title ?? "");
+  const [platform, setPlatform] = useState<string>(selectedIdea?.platform ?? "Instagram");
+  const [draft, setDraft] = useState("");
   const [generated, setGenerated] = useState<GeneratedPost | null>(null);
-  const [analysis,  setAnalysis]  = useState<AnalyzeResponse | null>(null);
-  const [genLoading,setGenLoading]= useState(false);
-  const [anaLoading,setAnaLoading]= useState(false);
+  const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
+  const [genLoading, setGenLoading] = useState(false);
+  const [anaLoading, setAnaLoading] = useState(false);
   const [scheduled, setScheduled] = useState(false);
   const [schedDate, setSchedDate] = useState("");
-  const [error,     setError]     = useState<string|null>(null);
-  const [copied,    setCopied]    = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Phase 6: Multi-Modal Media Generation
   const [mediaFormat, setMediaFormat] = useState<MediaFormat>("image");
@@ -104,6 +104,32 @@ export default function CreativeStudio({ selectedIdea }: Props) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handlePublish = () => {
+    if (!draft.trim()) return;
+    const text = encodeURIComponent(draft);
+    let url = "";
+
+    switch (platform.toLowerCase()) {
+      case "twitter":
+        url = `https://twitter.com/intent/tweet?text=${text}`;
+        break;
+      case "linkedin":
+        url = `https://www.linkedin.com/feed/?shareActive=true&text=${text}`;
+        break;
+      case "instagram":
+        navigator.clipboard.writeText(draft);
+        alert("Post text copied to clipboard! Opening Instagram...");
+        url = "https://instagram.com";
+        break;
+      default:
+        url = `https://${platform.toLowerCase()}.com`;
+    }
+
+    const newWindow = window.open(url, "_blank");
+    if (newWindow) newWindow.opener = null;
+  };
+
+
   const handleGenerateMedia = async () => {
     if (!draft.trim()) return;
     setMediaLoading(true);
@@ -133,15 +159,15 @@ export default function CreativeStudio({ selectedIdea }: Props) {
     <div className="page-body">
       <div>
         <h1 className="display-title">Creative <em>Studio</em></h1>
-        <p className="sub-text" style={{ marginTop:6 }}>
+        <p className="sub-text" style={{ marginTop: 6 }}>
           Generate → Edit → Score → Schedule. Left: your content. Right: emotional alignment.
         </p>
       </div>
 
       {/* Controls row */}
       <div className="card card-sm">
-        <div style={{ display:"flex", gap:12, alignItems:"flex-end", flexWrap:"wrap" }}>
-          <div className="field" style={{ flex:2, minWidth:200 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div className="field" style={{ flex: 2, minWidth: 200 }}>
             <label className="field-label">Topic / Idea</label>
             <input className="input"
               placeholder="e.g. 'The mistake that almost ended us'"
@@ -149,15 +175,15 @@ export default function CreativeStudio({ selectedIdea }: Props) {
               onChange={e => setTopic(e.target.value)}
             />
           </div>
-          <div className="field" style={{ flex:1, minWidth:120 }}>
+          <div className="field" style={{ flex: 1, minWidth: 120 }}>
             <label className="field-label">Platform</label>
             <select className="select" value={platform} onChange={e => setPlatform(e.target.value)}>
-              {["Instagram","LinkedIn","Twitter","TikTok"].map(p => <option key={p}>{p}</option>)}
+              {["Instagram", "LinkedIn", "Twitter", "TikTok"].map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
           <button className="btn btn-primary" onClick={handleGenerate} disabled={genLoading || !topic.trim()}>
-            {genLoading ? <><div className="spinner" style={{borderTopColor:"#000"}} /> Writing...</>
-                       : "✦ Generate Post"}
+            {genLoading ? <><div className="spinner" style={{ borderTopColor: "#000" }} /> Writing...</>
+              : "✦ Generate Post"}
           </button>
         </div>
       </div>
@@ -168,19 +194,19 @@ export default function CreativeStudio({ selectedIdea }: Props) {
       <div className="studio-split">
 
         {/* ── LEFT: Editor ── */}
-        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
           <div className="card card-accent-teal">
             <div className="card-header">
               <div className="section-title">Post Editor</div>
-              <div style={{ display:"flex", gap:8 }}>
+              <div style={{ display: "flex", gap: 8 }}>
                 <button className="copy-btn" onClick={handleCopy}>
                   {copied ? "✓ Copied" : "⊕ Copy"}
                 </button>
                 <button className="btn btn-primary btn-sm" onClick={handleAnalyze}
                   disabled={anaLoading || !draft.trim()}>
-                  {anaLoading ? <><div className="spinner" style={{borderTopColor:"#000",width:12,height:12}} /> Scoring...</>
-                              : "⚡ Score Tone"}
+                  {anaLoading ? <><div className="spinner" style={{ borderTopColor: "#000", width: 12, height: 12 }} /> Scoring...</>
+                    : "⚡ Score Tone"}
                 </button>
               </div>
             </div>
@@ -191,12 +217,12 @@ export default function CreativeStudio({ selectedIdea }: Props) {
               onChange={e => setDraft(e.target.value)}
             />
 
-            <div style={{ display:"flex", justifyContent:"space-between", marginTop:8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
               <span className="mono-label">{draft.length} characters</span>
               {generated?.hashtags && generated.hashtags.length > 0 && (
-                <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                   {generated.hashtags.map(h => (
-                    <span key={h} className="badge badge-sky">#{h.replace(/^#/,"")}</span>
+                    <span key={h} className="badge badge-sky">#{h.replace(/^#/, "")}</span>
                   ))}
                 </div>
               )}
@@ -205,11 +231,11 @@ export default function CreativeStudio({ selectedIdea }: Props) {
 
           {/* Image Style Prompt */}
           {generated?.image_style_prompt && (
-            <div className="card card-sm" style={{ borderColor:"rgba(167,139,250,0.2)" }}>
-              <div className="mono-label" style={{ color:"var(--violet)", marginBottom:6 }}>
+            <div className="card card-sm" style={{ borderColor: "rgba(167,139,250,0.2)" }}>
+              <div className="mono-label" style={{ color: "var(--violet)", marginBottom: 6 }}>
                 🖼 AI Image Style Brief
               </div>
-              <p style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.6, fontStyle:"italic" }}>
+              <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, fontStyle: "italic" }}>
                 "{generated.image_style_prompt}"
               </p>
             </div>
@@ -217,18 +243,28 @@ export default function CreativeStudio({ selectedIdea }: Props) {
 
           {/* Schedule */}
           <div className="card card-sm">
-            <div className="mono-label" style={{ marginBottom:10 }}>📅 Schedule Post</div>
-            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-              <input className="input" type="datetime-local" style={{ flex:1 }}
+            <div className="mono-label" style={{ marginBottom: 10 }}>📅 Action</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+              <button
+                className="btn btn-primary"
+                onClick={handlePublish}
+                disabled={!draft.trim()}
+                style={{ flex: 1, minWidth: "140px" }}
+              >
+                🚀 Publish Now
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <input className="input" type="datetime-local" style={{ flex: 1, minWidth: "200px" }}
                 value={schedDate}
                 onChange={e => setSchedDate(e.target.value)}
               />
               <button className="btn btn-ghost" onClick={handleSchedule}
                 disabled={!draft || !schedDate}>
-                Schedule
+                Schedule Later
               </button>
             </div>
-            {scheduled && <div className="alert alert-success" style={{ marginTop:10 }}>
+            {scheduled && <div className="alert alert-success" style={{ marginTop: 10 }}>
               ✓ Post added to calendar.
             </div>}
           </div>
@@ -237,8 +273,8 @@ export default function CreativeStudio({ selectedIdea }: Props) {
           <div className="card card-accent-teal">
             <div className="card-header">
               <div className="section-title">🎨 Media Generator</div>
-              <button 
-                className="copy-btn" 
+              <button
+                className="copy-btn"
                 onClick={() => setShowMediaGenerator(!showMediaGenerator)}
               >
                 {showMediaGenerator ? "▼ Hide" : "▶ Show"}
@@ -246,18 +282,18 @@ export default function CreativeStudio({ selectedIdea }: Props) {
             </div>
 
             {showMediaGenerator && (
-              <div style={{ display:"flex", flexDirection:"column", gap:14, marginTop:12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 12 }}>
                 {/* Format Selection */}
                 <div>
-                  <div className="mono-label" style={{ marginBottom:8 }}>Select Format</div>
-                  <div style={{ display:"flex", gap:8 }}>
+                  <div className="mono-label" style={{ marginBottom: 8 }}>Select Format</div>
+                  <div style={{ display: "flex", gap: 8 }}>
                     {(["image", "carousel", "video"] as MediaFormat[]).map(format => (
                       <button
                         key={format}
                         className={`btn ${mediaFormat === format ? "btn-primary" : "btn-ghost"}`}
                         onClick={() => setMediaFormat(format)}
                         disabled={mediaLoading}
-                        style={{ flex:1, textTransform:"capitalize" }}
+                        style={{ flex: 1, textTransform: "capitalize" }}
                       >
                         {format === "image" && "🖼 Image"}
                         {format === "carousel" && "📱 Carousel"}
@@ -268,22 +304,22 @@ export default function CreativeStudio({ selectedIdea }: Props) {
                 </div>
 
                 {/* Format Description */}
-                <div style={{ fontSize:12, color:"var(--text-dim)", fontStyle:"italic" }}>
+                <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
                   {mediaFormat === "image" && "Generate a single high-quality image (1024x1024) for your post"}
                   {mediaFormat === "carousel" && "Generate 3-5 slides with cohesive visual storytelling"}
                   {mediaFormat === "video" && "Generate 5-8 keyframe storyboard for video planning"}
                 </div>
 
                 {/* Generate Button */}
-                <button 
-                  className="btn btn-primary" 
+                <button
+                  className="btn btn-primary"
                   onClick={handleGenerateMedia}
                   disabled={mediaLoading || !draft.trim()}
-                  style={{ width:"100%" }}
+                  style={{ width: "100%" }}
                 >
                   {mediaLoading ? (
                     <>
-                      <div className="spinner" style={{borderTopColor:"#000"}} />
+                      <div className="spinner" style={{ borderTopColor: "#000" }} />
                       Generating {mediaFormat}...
                     </>
                   ) : (
@@ -293,15 +329,15 @@ export default function CreativeStudio({ selectedIdea }: Props) {
 
                 {/* Loading State */}
                 {mediaLoading && (
-                  <div className="card card-sm" style={{ background:"rgba(20,184,166,0.05)" }}>
-                    <div style={{ textAlign:"center", padding:"20px 0" }}>
-                      <div className="spinner" style={{ width:32, height:32, margin:"0 auto 12px" }} />
+                  <div className="card card-sm" style={{ background: "rgba(20,184,166,0.05)" }}>
+                    <div style={{ textAlign: "center", padding: "20px 0" }}>
+                      <div className="spinner" style={{ width: 32, height: 32, margin: "0 auto 12px" }} />
                       <div className="mono-label">
                         {mediaFormat === "image" && "Creating image with AWS Bedrock Titan..."}
                         {mediaFormat === "carousel" && "Generating carousel slides..."}
                         {mediaFormat === "video" && "Creating video storyboard..."}
                       </div>
-                      <div style={{ fontSize:11, color:"var(--text-dim)", marginTop:6 }}>
+                      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>
                         This may take 10-45 seconds
                       </div>
                     </div>
@@ -314,31 +350,31 @@ export default function CreativeStudio({ selectedIdea }: Props) {
                     {/* Single Image */}
                     {generatedMedia.format === "image" && generatedMedia.image_url && (
                       <div className="card card-sm">
-                        <div className="mono-label" style={{ marginBottom:10 }}>
+                        <div className="mono-label" style={{ marginBottom: 10 }}>
                           Generated Image
                         </div>
-                        <img 
-                          src={generatedMedia.image_url} 
+                        <img
+                          src={generatedMedia.image_url}
                           alt="Generated content"
-                          style={{ 
-                            width:"100%", 
-                            borderRadius:8, 
-                            border:"1px solid var(--border)" 
+                          style={{
+                            width: "100%",
+                            borderRadius: 8,
+                            border: "1px solid var(--border)"
                           }}
                         />
-                        <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                          <a 
-                            href={generatedMedia.image_url} 
-                            download 
+                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                          <a
+                            href={generatedMedia.image_url}
+                            download
                             className="btn btn-ghost btn-sm"
-                            style={{ flex:1 }}
+                            style={{ flex: 1 }}
                           >
                             ⬇ Download
                           </a>
-                          <button 
+                          <button
                             className="btn btn-ghost btn-sm"
                             onClick={() => window.open(generatedMedia.image_url, '_blank')}
-                            style={{ flex:1 }}
+                            style={{ flex: 1 }}
                           >
                             🔍 View Full
                           </button>
@@ -349,35 +385,35 @@ export default function CreativeStudio({ selectedIdea }: Props) {
                     {/* Carousel */}
                     {generatedMedia.format === "carousel" && generatedMedia.slides && (
                       <div className="card card-sm">
-                        <div className="mono-label" style={{ marginBottom:10 }}>
+                        <div className="mono-label" style={{ marginBottom: 10 }}>
                           Carousel ({generatedMedia.slides.length} slides)
                         </div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                           {generatedMedia.slides.map((slide, idx) => (
-                            <div 
+                            <div
                               key={idx}
-                              style={{ 
-                                padding:12, 
-                                border:"1px solid var(--border)", 
-                                borderRadius:8,
-                                background:"rgba(255,255,255,0.02)"
+                              style={{
+                                padding: 12,
+                                border: "1px solid var(--border)",
+                                borderRadius: 8,
+                                background: "rgba(255,255,255,0.02)"
                               }}
                             >
-                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                                 <span className="badge badge-teal">Slide {slide.slide_number}</span>
-                                <span style={{ fontWeight:600, fontSize:13 }}>{slide.title}</span>
+                                <span style={{ fontWeight: 600, fontSize: 13 }}>{slide.title}</span>
                               </div>
-                              <p style={{ fontSize:12, color:"var(--text-dim)", marginBottom:10 }}>
+                              <p style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
                                 {slide.content}
                               </p>
                               {slide.image_url && (
-                                <img 
-                                  src={slide.image_url} 
+                                <img
+                                  src={slide.image_url}
                                   alt={`Slide ${slide.slide_number}`}
-                                  style={{ 
-                                    width:"100%", 
-                                    borderRadius:6, 
-                                    border:"1px solid var(--border)" 
+                                  style={{
+                                    width: "100%",
+                                    borderRadius: 6,
+                                    border: "1px solid var(--border)"
                                   }}
                                 />
                               )}
@@ -390,35 +426,35 @@ export default function CreativeStudio({ selectedIdea }: Props) {
                     {/* Video Storyboard */}
                     {generatedMedia.format === "video" && generatedMedia.storyboard && (
                       <div className="card card-sm">
-                        <div className="mono-label" style={{ marginBottom:10 }}>
+                        <div className="mono-label" style={{ marginBottom: 10 }}>
                           Video Storyboard ({generatedMedia.storyboard.length} scenes)
                         </div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                           {generatedMedia.storyboard.map((scene, idx) => (
-                            <div 
+                            <div
                               key={idx}
-                              style={{ 
-                                padding:12, 
-                                border:"1px solid var(--border)", 
-                                borderRadius:8,
-                                background:"rgba(255,255,255,0.02)"
+                              style={{
+                                padding: 12,
+                                border: "1px solid var(--border)",
+                                borderRadius: 8,
+                                background: "rgba(255,255,255,0.02)"
                               }}
                             >
-                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                                 <span className="badge badge-violet">Scene {scene.scene_number}</span>
                                 <span className="badge badge-sky">{scene.duration}</span>
                               </div>
-                              <p style={{ fontSize:12, color:"var(--text-dim)", marginBottom:10 }}>
+                              <p style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>
                                 {scene.description}
                               </p>
                               {scene.image_url && (
-                                <img 
-                                  src={scene.image_url} 
+                                <img
+                                  src={scene.image_url}
                                   alt={`Scene ${scene.scene_number}`}
-                                  style={{ 
-                                    width:"100%", 
-                                    borderRadius:6, 
-                                    border:"1px solid var(--border)" 
+                                  style={{
+                                    width: "100%",
+                                    borderRadius: 6,
+                                    border: "1px solid var(--border)"
                                   }}
                                 />
                               )}
@@ -429,7 +465,7 @@ export default function CreativeStudio({ selectedIdea }: Props) {
                     )}
 
                     {/* Generation Stats */}
-                    <div style={{ fontSize:11, color:"var(--text-dim)", textAlign:"center" }}>
+                    <div style={{ fontSize: 11, color: "var(--text-dim)", textAlign: "center" }}>
                       Generated in {generatedMedia.generation_time_seconds.toFixed(1)}s
                     </div>
                   </div>
@@ -440,7 +476,7 @@ export default function CreativeStudio({ selectedIdea }: Props) {
         </div>
 
         {/* ── RIGHT: Emotional Aligner ── */}
-        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
           {!analysis && !anaLoading && (
             <div className="card">
@@ -458,28 +494,30 @@ export default function CreativeStudio({ selectedIdea }: Props) {
           {anaLoading && (
             <div className="card">
               <div className="empty-state">
-                <div className="spinner" style={{ width:28, height:28, marginBottom:12 }} />
+                <div className="spinner" style={{ width: 28, height: 28, marginBottom: 12 }} />
                 <div className="empty-sub">Running emotional analysis...</div>
               </div>
             </div>
           )}
 
           {analysis && (
-            <div className="fade-up" style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
               {/* Score card */}
               <div className="card card-accent-teal">
-                <div style={{ display:"flex", alignItems:"center", gap:20, marginBottom:16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 16 }}>
                   <ScoreRing score={score} size={100} />
-                  <div style={{ flex:1 }}>
-                    <div style={{ marginBottom:8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ marginBottom: 8 }}>
                       <span className={`badge badge-${verdict ?? "teal"}`}>
                         {VERDICT_LABEL[verdict ?? ""] ?? verdict}
                       </span>
                     </div>
                     {analysis.analysis?.emotional_archetype && (
-                      <div style={{ fontFamily:"var(--font-display)", fontSize:15, fontWeight:700,
-                        fontStyle:"italic", marginBottom:4 }}>
+                      <div style={{
+                        fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700,
+                        fontStyle: "italic", marginBottom: 4
+                      }}>
                         {analysis.analysis.emotional_archetype}
                       </div>
                     )}
@@ -491,7 +529,7 @@ export default function CreativeStudio({ selectedIdea }: Props) {
 
                 {/* Banned words alert */}
                 {bannedFound.length > 0 && (
-                  <div className="alert alert-error" style={{ marginBottom:12 }}>
+                  <div className="alert alert-error" style={{ marginBottom: 12 }}>
                     ⚠ Banned words detected: {bannedFound.join(", ")}
                   </div>
                 )}
@@ -513,9 +551,9 @@ export default function CreativeStudio({ selectedIdea }: Props) {
 
                 {/* Missing signals */}
                 {missingSignals.length > 0 && (
-                  <div style={{ marginTop:12 }}>
-                    <div className="mono-label" style={{ marginBottom:6 }}>Missing Emotional Signals</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                  <div style={{ marginTop: 12 }}>
+                    <div className="mono-label" style={{ marginBottom: 6 }}>Missing Emotional Signals</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                       {missingSignals.map(s => <span key={s} className="badge badge-coral">{s}</span>)}
                     </div>
                   </div>
@@ -525,9 +563,9 @@ export default function CreativeStudio({ selectedIdea }: Props) {
               {/* Rewrite suggestion */}
               {analysis.analysis?.rewrite_suggestion && (
                 <div className="card card-sm">
-                  <div className="insight-block rewrite" style={{ margin:0 }}>
+                  <div className="insight-block rewrite" style={{ margin: 0 }}>
                     <div className="insight-block-label">✦ Suggested Rewrite</div>
-                    <div className="insight-block-text" style={{ color:"var(--text)", marginBottom:10 }}>
+                    <div className="insight-block-text" style={{ color: "var(--text)", marginBottom: 10 }}>
                       {analysis.analysis.rewrite_suggestion}
                     </div>
                     <button className="copy-btn" onClick={() => {
@@ -540,16 +578,16 @@ export default function CreativeStudio({ selectedIdea }: Props) {
               {/* Reference posts */}
               {analysis.reference_posts?.length > 0 && (
                 <div className="card card-sm">
-                  <div className="mono-label" style={{ marginBottom:10 }}>Reference Posts Used</div>
-                  {analysis.reference_posts.slice(0,3).map((p, i) => (
+                  <div className="mono-label" style={{ marginBottom: 10 }}>Reference Posts Used</div>
+                  {analysis.reference_posts.slice(0, 3).map((p, i) => (
                     <div key={i} style={{
-                      display:"flex", gap:10, alignItems:"flex-start",
-                      padding:"10px 0",
+                      display: "flex", gap: 10, alignItems: "flex-start",
+                      padding: "10px 0",
                       borderBottom: i < 2 ? "1px solid var(--border)" : "none"
                     }}>
                       <span className="badge badge-teal">ERS {p.ers.toFixed(0)}</span>
-                      <span style={{ fontSize:11, color:"var(--text-dim)", lineHeight:1.5 }}>
-                        {p.text.substring(0,120)}...
+                      <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+                        {p.text.substring(0, 120)}...
                       </span>
                     </div>
                   ))}

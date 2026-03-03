@@ -246,6 +246,7 @@ def save_brand_dna():
         "banned_words": json.dumps(data.get("banned_words", [])),
         "typography": data.get("typography", ""),
         "logo_url": data.get("logo_url", ""),
+        "connected_platforms": json.dumps(data.get("connected_platforms", [])),
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")
     }
 

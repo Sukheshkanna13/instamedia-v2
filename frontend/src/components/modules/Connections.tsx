@@ -37,31 +37,28 @@ export default function Connections() {
     // Load brand DNA to check connected platforms
     api.getBrandDNA()
       .then(res => setBrandDNA(res.data))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
-
-    // Check for OAuth callback success
-    const params = new URLSearchParams(window.location.search);
-    const oauthSuccess = params.get('oauth_success');
-    if (oauthSuccess) {
-      setSuccess(`Successfully connected ${oauthSuccess}!`);
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
-      // Reload brand DNA
-      api.getBrandDNA().then(res => setBrandDNA(res.data));
-    }
   }, []);
 
-  const handleConnect = async (platform: typeof PLATFORMS[number]['id']) => {
+  const handleConnect = async (platform: string) => {
     setConnecting(platform);
     setError(null);
-    
     try {
-      const response = await api.initiateOAuth(platform);
-      // Redirect to OAuth provider
-      window.location.href = response.auth_url;
-    } catch (err) {
-      setError((err as Error).message);
+      if (!brandDNA) return;
+      const current = brandDNA.connected_platforms || [];
+      const updated = current.includes(platform)
+        ? current.filter(p => p !== platform)
+        : [...current, platform];
+
+      const newData = { ...brandDNA, connected_platforms: updated };
+      await api.saveBrandDNA(newData);
+      setBrandDNA(newData);
+      setSuccess(`Successfully ${updated.includes(platform) ? 'connected' : 'disconnected'} ${platform}!`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || "Failed to update connection");
+    } finally {
       setConnecting(null);
     }
   };
@@ -172,11 +169,15 @@ export default function Connections() {
 
                   {connected ? (
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <button className="btn btn-ghost btn-sm" disabled>
-                        Disconnect
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleConnect(platform.id)}
+                        disabled={isConnecting}
+                      >
+                        {isConnecting ? "Disconnecting..." : "Disconnect"}
                       </button>
                       <span className="mono-label" style={{ color: "var(--text-muted)" }}>
-                        Token expires in 45 days · Auto-refresh enabled
+                        Ready for Web Intent Publishing
                       </span>
                     </div>
                   ) : (
@@ -197,52 +198,22 @@ export default function Connections() {
                     </button>
                   )}
                 </div>
-
-                {/* Connection Stats (if connected) */}
-                {connected && (
-                  <div
-                    style={{
-                      padding: "16px 20px",
-                      background: "var(--s2)",
-                      borderRadius: "var(--r)",
-                      border: "1px solid var(--border)",
-                      textAlign: "center",
-                      minWidth: 120,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: 24,
-                        fontWeight: 900,
-                        color: platform.color,
-                        lineHeight: 1,
-                      }}
-                    >
-                      12
-                    </div>
-                    <div className="mono-label" style={{ fontSize: 9, marginTop: 4 }}>
-                      POSTS PUBLISHED
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Security Notice */}
-      <div className="card card-sm" style={{ background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.15)" }}>
+      {/* Connection Notice */}
+      <div className="card card-sm" style={{ background: "rgba(0,212,184,0.05)", border: "1px solid rgba(0,212,184,0.15)" }}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <div style={{ fontSize: 20 }}>🔒</div>
+          <div style={{ fontSize: 20 }}>⚡</div>
           <div style={{ flex: 1 }}>
-            <div className="mono-label" style={{ color: "var(--violet)", marginBottom: 4 }}>
-              SECURITY & PRIVACY
+            <div className="mono-label" style={{ color: "var(--teal)", marginBottom: 4 }}>
+              NATIVE WEB INTENT PUBLISHING
             </div>
             <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.6 }}>
-              OAuth tokens are encrypted and stored in AWS Secrets Manager. We never see your passwords.
-              Tokens auto-refresh every 60 days. You can revoke access anytime from your platform settings.
+              You do not need to provide passwords or API tokens! InstaMedia uses "Web Intent" sharing. We generate your content and open your native social app (in a new tab) with your text and images pre-filled so you can confidently hit publish yourself.
             </p>
           </div>
         </div>

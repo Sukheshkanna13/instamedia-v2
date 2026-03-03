@@ -87,6 +87,31 @@ export default function Calendar() {
     }
   };
 
+  const handlePublish = (platform: string, content: string) => {
+    const text = encodeURIComponent(content);
+    let url = "";
+
+    switch (platform.toLowerCase()) {
+      case "twitter":
+        url = `https://twitter.com/intent/tweet?text=${text}`;
+        break;
+      case "linkedin":
+        url = `https://www.linkedin.com/feed/?shareActive=true&text=${text}`;
+        break;
+      case "instagram":
+        navigator.clipboard.writeText(content);
+        alert("Post text copied to clipboard! Opening Instagram...");
+        url = "https://instagram.com";
+        break;
+      default:
+        url = `https://${platform}.com`;
+    }
+
+    // Attempt to open the intent in a new tab smoothly
+    const newWindow = window.open(url, "_blank");
+    if (newWindow) newWindow.opener = null;
+  };
+
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
   const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
@@ -120,10 +145,10 @@ export default function Calendar() {
         ))}
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start", width: "100%" }}>
 
         {/* ── CALENDAR GRID ── */}
-        <div className="card" style={{ padding: 20, flex: "1.5 1 500px", minWidth: 0 }}>
+        <div className="card" style={{ padding: 20, flex: "1 1 500px", minWidth: 0 }}>
           {/* Month nav */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <button className="btn-icon" onClick={prevMonth}>‹</button>
@@ -174,7 +199,7 @@ export default function Calendar() {
         </div>
 
         {/* ── DAY DETAIL / POST LIST ── */}
-        <div style={{ flex: "1 1 350px", minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: "1 1 350px", minWidth: 0 }}>
           {selectedDay && (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="card-header">
@@ -238,6 +263,13 @@ export default function Calendar() {
                           </div>
                         ) : (
                           <>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ color: "var(--teal)" }}
+                              onClick={() => handlePublish(p.platform, p.content)}
+                            >
+                              🚀 Publish Now
+                            </button>
                             <button
                               className="btn btn-ghost btn-sm"
                               onClick={() => {
@@ -316,11 +348,27 @@ export default function Calendar() {
                         }}>
                           {p.content}
                         </div>
-                        <div style={{ display: "flex", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <span className={`badge badge-${p.platform}`}>{p.platform}</span>
                           <span className={`badge ${p.status === "scheduled" ? "badge-teal" : "badge-emerald"}`}>
                             {p.status}
                           </span>
+                          <button
+                            className="btn-icon"
+                            style={{ marginLeft: "auto", width: 24, height: 24, fontSize: 13, color: "var(--teal)", border: "none", background: "transparent" }}
+                            title="Publish Now"
+                            onClick={() => handlePublish(p.platform, p.content)}
+                          >
+                            🚀
+                          </button>
+                          <button
+                            className="btn-icon"
+                            style={{ marginLeft: "auto", width: 24, height: 24, fontSize: 12, color: "var(--coral)", border: "none", background: "transparent" }}
+                            title="Delete Post"
+                            onClick={() => handleDelete(p.id)}
+                          >
+                            ×
+                          </button>
                         </div>
                       </div>
                     </div>
