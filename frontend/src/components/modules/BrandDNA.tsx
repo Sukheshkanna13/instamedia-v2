@@ -33,9 +33,26 @@ export default function BrandDNAVault() {
         const parsed: Partial<BrandDNA> = { ...DEFAULT_DNA };
         for (const key of Object.keys(d)) {
           if (["tone_descriptors", "hex_colors", "banned_words"].includes(key)) {
-            const val = d[key];
-            (parsed as Record<string, unknown>)[key] = typeof val === "string"
-              ? JSON.parse(val || "[]") : (val ?? []);
+            let val = d[key];
+
+            // Defensive loop: keep trying to parse if it's double-escaped JSON
+            while (typeof val === "string") {
+              try {
+                const parsedVal = JSON.parse(val);
+                if (typeof parsedVal === "string") {
+                  val = parsedVal; // It was double escaped, loop again
+                } else {
+                  val = parsedVal; // Successfully reached the Array
+                  break;
+                }
+              } catch (e) {
+                // If it fails to parse but is a string, it might just be malformed. Default to empty array.
+                val = [];
+                break;
+              }
+            }
+
+            (parsed as Record<string, unknown>)[key] = Array.isArray(val) ? val : [];
           } else {
             (parsed as Record<string, unknown>)[key] = d[key];
           }
