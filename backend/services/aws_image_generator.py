@@ -223,18 +223,29 @@ class AWSImageGenerator:
         """
         start_time = time.time()
         
-        # Generate image
-        image_data = self.generate_image(prompt, **kwargs)
+        # Generate image (MOCKED for Local UI Testing)
+        # image_data = self.generate_image(prompt, **kwargs)
         
-        # Upload to S3
-        url = self.upload_to_s3(image_data, filename)
+        # Upload to S3 (MOCKED)
+        # url = self.upload_to_s3(image_data, filename)
+        
+        import random
+        # Random high-quality tech/office placeholders from Unsplash
+        mock_urls = [
+            "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=80",
+            "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&q=80",
+            "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=80",
+            "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80",
+            "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80"
+        ]
+        url = random.choice(mock_urls)
         
         generation_time = time.time() - start_time
         
         return {
             "url": url,
             "filename": filename or url.split('/')[-1],
-            "size_bytes": len(image_data),
+            "size_bytes": 102400, # Fake 100kb
             "generation_time_seconds": round(generation_time, 2)
         }
     

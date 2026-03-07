@@ -13,6 +13,7 @@ chromadb = None
 SentenceTransformer = None
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from services.media_generator import create_media_generator
 
 # Apify client for web scraping
 try:
@@ -565,6 +566,44 @@ Return ONLY valid JSON:
 
 
 # ── MULTI-MODAL MEDIA GENERATION (Phase 6) ────────────────────────────────────
+
+@app.route('/api/studio/translate', methods=['POST'])
+def translate_media():
+    """Endpoint for Stage A: Translating captions to creative prompts"""
+    try:
+        data = request.json
+        caption = data.get('caption')
+        format_type = data.get('format', 'image') # image, carousel, or video
+        hashtags = data.get('hashtags', [])
+        brand_context = data.get('brand_context', '')
+
+        if not caption:
+            return jsonify({'error': 'Caption is required'}), 400
+
+        # Create generator using your existing Gemini/Groq function
+        media_generator = create_media_generator(call_llm) 
+        
+        # Process the translation
+        result = media_generator.translate_to_creative_prompt(
+            caption=caption,
+            hashtags=hashtags,
+            format_type=format_type,
+            brand_context=brand_context
+        )
+        
+        return jsonify({
+            'success': True,
+            'data': result
+        }), 200
+
+    except Exception as e:
+        print(f"Translation Error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 
 @app.route("/api/studio/generate-media", methods=["POST"])
 def generate_media():

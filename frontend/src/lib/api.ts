@@ -145,6 +145,13 @@ export const api = {
   }) => post<StudioGenerateResponse>("/api/studio/generate", params, { timeout: 25000 }),
 
   // Multi-Modal Media Generation (Phase 6) - with extended timeout for image generation
+  translateMedia: (params: {
+    caption: string;
+    hashtags: string[];
+    format: 'image' | 'carousel' | 'video';
+    brand_context?: string;
+  }) => post<{ success: boolean; data: any }>("/api/studio/translate", params, { timeout: 30000 }),
+
   generateMedia: (params: {
     caption: string;
     hashtags: string[];

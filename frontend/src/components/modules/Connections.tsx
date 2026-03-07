@@ -33,11 +33,37 @@ export default function Connections() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Defensively parse JSON arrays on load (Supabase stringified nested objects)
+  const parseJsonSafe = (val: any, fallback: any[] = []): any[] => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed : fallback;
+      } catch (e) {
+        // Handle double escaped strings
+        try {
+          const doubleParsed = JSON.parse(JSON.parse(`"${val}"`));
+          return Array.isArray(doubleParsed) ? doubleParsed : fallback;
+        } catch (e2) {
+          return fallback;
+        }
+      }
+    }
+    return fallback;
+  };
+
   useEffect(() => {
     // Load brand DNA to check connected platforms
     api.getBrandDNA()
-      .then(res => setBrandDNA(res.data))
-      .catch(() => { })
+      .then(res => {
+        const data = res.data;
+        if (data && data.connected_platforms) {
+          data.connected_platforms = parseJsonSafe(data.connected_platforms);
+        }
+        setBrandDNA(data);
+      })
+      .catch((e) => { console.error(e) })
       .finally(() => setLoading(false));
   }, []);
 
@@ -46,12 +72,23 @@ export default function Connections() {
     setError(null);
     try {
       if (!brandDNA) return;
-      const current = brandDNA.connected_platforms || [];
+
+      // Extract current platforms cleanly
+      const current = Array.isArray(brandDNA.connected_platforms)
+        ? brandDNA.connected_platforms
+        : parseJsonSafe(brandDNA.connected_platforms);
+
       const updated = current.includes(platform)
         ? current.filter(p => p !== platform)
         : [...current, platform];
 
-      const newData = { ...brandDNA, connected_platforms: updated };
+      const newData = {
+        ...brandDNA,
+        // Supabase expects a text-castable JSON value for array columns sometimes,
+        // but our safe parser handles both so we'll pass the raw array structure.
+        connected_platforms: updated
+      };
+
       await api.saveBrandDNA(newData);
       setBrandDNA(newData);
       setSuccess(`Successfully ${updated.includes(platform) ? 'connected' : 'disconnected'} ${platform}!`);
@@ -167,36 +204,38 @@ export default function Connections() {
                     {platform.description}
                   </p>
 
-                  {connected ? (
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    {connected ? (
+                      <>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleConnect(platform.id)}
+                          disabled={isConnecting}
+                        >
+                          {isConnecting ? "Disconnecting..." : "Disconnect"}
+                        </button>
+                        <span className="mono-label" style={{ color: "var(--text-muted)" }}>
+                          Ready for Web Intent Publishing
+                        </span>
+                      </>
+                    ) : (
                       <button
-                        className="btn btn-ghost btn-sm"
+                        className="btn btn-primary"
                         onClick={() => handleConnect(platform.id)}
                         disabled={isConnecting}
+                        style={{ minWidth: 140 }}
                       >
-                        {isConnecting ? "Disconnecting..." : "Disconnect"}
+                        {isConnecting ? (
+                          <>
+                            <div className="spinner" style={{ borderTopColor: "#000", width: 14, height: 14 }} />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>🔗 Connect {platform.name}</>
+                        )}
                       </button>
-                      <span className="mono-label" style={{ color: "var(--text-muted)" }}>
-                        Ready for Web Intent Publishing
-                      </span>
-                    </div>
-                  ) : (
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => handleConnect(platform.id)}
-                      disabled={isConnecting}
-                      style={{ minWidth: 140 }}
-                    >
-                      {isConnecting ? (
-                        <>
-                          <div className="spinner" style={{ borderTopColor: "#000", width: 14, height: 14 }} />
-                          Connecting...
-                        </>
-                      ) : (
-                        <>🔗 Connect {platform.name}</>
-                      )}
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

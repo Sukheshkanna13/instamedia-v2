@@ -136,13 +136,16 @@ export default function CreativeStudio({ selectedIdea }: Props) {
     setError(null);
     try {
       const hashtags = generated?.hashtags ?? [];
+
       const res = await api.generateMedia({
         caption: draft,
         hashtags,
         format: mediaFormat,
         brand_id: "default",
       });
+
       setGeneratedMedia(res.result);
+
     } catch (e) {
       setError((e as Error).message);
     } finally {
