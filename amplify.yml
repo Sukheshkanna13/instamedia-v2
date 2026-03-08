@@ -1,35 +1,20 @@
 version: 1
-# AWS Amplify Build Configuration for InstaMedia AI v2
+# AWS Amplify Build Configuration for InstaMedia AI v2 (Frontend Only)
+# The Python/Flask backend must be deployed separately (EC2, ECS, or Lambda).
 
-# Backend (Flask API)
-backend:
-  phases:
-    preBuild:
-      commands:
-        - cd backend
-        - pip install --upgrade pip
-        - pip install -r requirements.txt
-    build:
-      commands:
-        - echo "Backend dependencies installed"
-        - python --version
-        - pip list
-  artifacts:
-    baseDirectory: backend
-    files:
-      - '**/*'
-
-# Frontend (React + Vite)
 frontend:
   phases:
     preBuild:
       commands:
         - cd frontend
+        - echo "Installing dependencies..."
         - npm ci --legacy-peer-deps
     build:
       commands:
+        - echo "VITE_API_URL=$VITE_API_URL" > .env.production
+        - echo "VITE_ENVIRONMENT=production" >> .env.production
+        - echo "Building Vite React SPA for production..."
         - npm run build
-        - echo "Build complete"
   artifacts:
     baseDirectory: frontend/dist
     files:
@@ -38,11 +23,5 @@ frontend:
     paths:
       - frontend/node_modules/**/*
 
-# Environment variables (set these in Amplify Console)
-# LLM_PROVIDER=gemini
-# GEMINI_API_KEY=your_key_here
-# GROQ_API_KEY=your_key_here
-# SUPABASE_URL=your_url_here
-# SUPABASE_ANON_KEY=your_key_here
-# FLASK_ENV=production
-# PORT=5001
+# ─── Environment variables (set these in Amplify Console) ───
+# VITE_API_URL = https://your-backend-api-domain.com

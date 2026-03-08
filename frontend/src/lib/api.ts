@@ -5,7 +5,7 @@ import type {
   MediaGenerateResponse
 } from "../types";
 
-const BASE = "";
+const BASE = import.meta.env.VITE_API_URL || "";
 
 // API Gateway timeout protection: 28s client-side timeout (1s buffer before 29s gateway timeout)
 const API_TIMEOUT_MS = 28000;
