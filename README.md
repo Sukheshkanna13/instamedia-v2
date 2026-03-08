@@ -1,6 +1,8 @@
 # 🚀 InstaMedia AI: The Multi-Agent Emotional Signal Engine
 
 **AWS AI for Bharat Hackathon Submission** | **Team Name:** newGPT | **Team Leader:** Sukhesh kanna Saravanan 
+
+
 <img width="1470" height="729" alt="Screenshot 2026-03-08 at 11 42 05 PM" src="https://github.com/user-attachments/assets/346df0c1-d39c-43ce-a002-2fc304c60c27" />
 
 
@@ -12,7 +14,6 @@ Generative AI has completely solved content production speed, but it broke somet
 <img width="875" height="475" alt="Screenshot 2026-03-09 at 1 40 56 AM" src="https://github.com/user-attachments/assets/19e145ce-d759-4b74-b017-dddfe79206ad" />
 
 ---
-<img width="658" height="325" alt="Screenshot 2026-03-09 at 1 41 24 AM" src="https://github.com/user-attachments/assets/36ec4cb3-9f96-4f5e-98b9-463a8d9d5210" />
 
 ## 💡 Core Features & Use Cases
 
