@@ -157,6 +157,7 @@ export const api = {
     hashtags: string[];
     format: 'image' | 'carousel' | 'video';
     brand_id?: string;
+    image_prompt?: string;
   }) => post<MediaGenerateResponse>("/api/studio/generate-media", params, { timeout: 45000 }),
 
   // Generator (simple)
