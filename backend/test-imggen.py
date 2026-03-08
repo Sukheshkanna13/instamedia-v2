@@ -3,7 +3,7 @@ from openai import OpenAI
 import requests
 
 # User provided API key
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "API KEY HERE"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
