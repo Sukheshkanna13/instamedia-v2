@@ -1,180 +1,72 @@
-# InstaMedia AI v2 — Emotional Signal Engine
-### TypeScript + Supabase + 4-Module Architecture
+# 🚀 InstaMedia AI: The Multi-Agent Emotional Signal Engine
 
-Insta Media AI is built on an Orchestrator-Worker Multi-Agent Architecture that coordinates specialized AI agents to deliver autonomous marketing operations. The system leverages AWS serverless infrastructure for scalability and cost-efficiency, with Amazon Bedrock providing the foundation for AI-powered content generation and decision-making.
+**AWS AI for Bharat Hackathon Submission** | [cite_start]**Team Name:** newGPT [cite: 6] | [cite_start]**Team Leader:** Sukhesh kanna Saravanan [cite: 7]
+<img width="1470" height="729" alt="Screenshot 2026-03-08 at 11 42 05 PM" src="https://github.com/user-attachments/assets/346df0c1-d39c-43ce-a002-2fc304c60c27" />
 
-The architecture follows event-driven patterns where the Orchestrator acts as the central coordinator, delegating tasks to specialized agents (Intelligence Gatherer, Creative Suite, Distribution Engine, and Analyst Agent) that operate independently but maintain state coherence through DynamoDB. This design enables parallel processing, fault isolation, and independent scaling of each agent based on workload.
-```
-Frontend: React + TypeScript + Vite (no external UI library)
-Backend:  Python Flask + ChromaDB + sentence-transformers
-Database: Supabase PostgreSQL (free tier) + local fallback
-AI:       Gemini 1.5 Flash (free) or Groq Llama 3 (free)
-Cost:     $0
-```
+
+
+[cite_start]Generative AI has completely solved content production speed, but it broke something much more important: **Emotional Connection**[cite: 15]. [cite_start]Currently, 68% of consumers report that AI-generated content feels hollow, leading to a massive drop in trust and engagement[cite: 21, 24, 25]. Furthermore, traditional emotionally-engaging video shoots remain completely unaffordable for local Indian MSMEs. 
+
+[cite_start]**InstaMedia AI** bridges this **Resonance Gap**[cite: 14]. [cite_start]It is not just an AI generator; it is an autonomous digital marketing agency built on a serverless AWS pipeline[cite: 39, 40].
+
+<img width="875" height="475" alt="Screenshot 2026-03-09 at 1 40 56 AM" src="https://github.com/user-attachments/assets/19e145ce-d759-4b74-b017-dddfe79206ad" />
+
+---
+<img width="658" height="325" alt="Screenshot 2026-03-09 at 1 41 24 AM" src="https://github.com/user-attachments/assets/36ec4cb3-9f96-4f5e-98b9-463a8d9d5210" />
+
+## 💡 Core Features & Use Cases
+
+1. [cite_start]**Brand DNA Vault**[cite: 30]: Autonomously extracts your Brand DNA from past content. [cite_start]It analyzes color palettes, pacing, and human emotional cues to build a custom vault, ensuring every generated ad intrinsically feels like your brand[cite: 80].
+2. [cite_start]**Autonomous Creative Studio** [cite: 81][cite_start]: A multi-agent AI workflow that autonomously handles scriptwriting, storyboarding, voiceover synthesis, and video rendering[cite: 81].
+3. [cite_start]**Hyper-Localization at Scale (Bharat-First)**: Dynamically replaces text and lip-syncs voiceovers into multiple Indic languages (Hindi, Tamil, Telugu, Marathi) in real-time[cite: 81, 471, 473].
+4. **Predictive A/B Testing via ERS**: Before publishing, our Analyst Agent scores the generated video using a proprietary **Emotional Resonance Score (ERS)**:
+   [cite_start]`ERS = log1p(likes * 0.2 + comments * 0.5 + shares * 0.8) * 10`[cite: 106].
 
 ---
 
-## 4 Modules Built
+## ⚙️ System Architecture & Solution Flow
 
-| Module | What It Does |
-|--------|-------------|
-| **Brand DNA Vault** | Store tone, colors, banned words, logo. AI reads this before generating. |
-| **Ideation** | 5 content ideas conditioned on Brand DNA + ESG emotional memory |
-| **Creative Studio** | Split screen: generate post left, emotional score right |
-| **Content Calendar** | Visual calendar of scheduled posts + upcoming queue |
+InstaMedia AI operates on an event-driven, multi-agent pipeline designed to deliver enterprise-grade rendering at near-zero idle cost.
 
----
+### Architecture Flow Diagram
 
-## Project Structure
+```mermaid
+graph TD
+    %% User Interaction Layer
+    User[👤 User / Editor] -->|Inputs Goals / CSV| UI[💻 React Frontend]
+    UI -->|HTTPS Requests| API[Gateway / Flask API]
 
-```
-instamedia-v2/
-├── backend/
-│   ├── app.py                    ← Flask API (all routes, Supabase integrated)
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx               ← Sidebar layout + tab routing
-│   │   ├── index.css             ← Full design system (Playfair + IBM Plex Mono)
-│   │   ├── main.tsx
-│   │   ├── types/index.ts        ← All TypeScript interfaces
-│   │   ├── lib/api.ts            ← Typed API client
-│   │   └── components/
-│   │       ├── ui/
-│   │       │   └── ScoreRing.tsx
-│   │       └── modules/
-│   │           ├── Overview.tsx       ← Dashboard with stats + activity feed
-│   │           ├── BrandDNA.tsx       ← Brand DNA Vault form
-│   │           ├── Ideation.tsx       ← AI idea generation
-│   │           ├── CreativeStudio.tsx ← Generate + Analyze split screen
-│   │           └── Calendar.tsx       ← Content calendar + scheduler
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   └── index.html
-├── supabase_schema.sql           ← Run once in Supabase SQL Editor
-└── data/brand_posts.csv          ← (copy from v1)
-```
+    %% Intelligence & Memory Layer
+    subgraph "Learning Loop & Memory"
+        API -->|Uploads Past Ads| S3[(Amazon S3)]
+        S3 -->|Analyzes Visuals| Rek[Amazon Rekognition]
+        API -->|Calculates ERS| ERS_Calc[ERS Scoring Engine]
+        Rek --> Titan[Bedrock: Titan Embeddings]
+        ERS_Calc --> Titan
+        Titan -->|Stores Vector + ERS| Chroma[(ChromaDB Vector Graph)]
+    end
 
----
+    %% Multi-Agent Orchestration
+    subgraph "Agentic Generation (AWS Bedrock & Lambdas)"
+        API --> Orch[🧠 Orchestrator Agent]
+        Chroma -->|Conditions on Top ERS| Orch
+        Orch --> Idea[💡 Ideation Agent]
+        Orch --> Studio[🎨 Creative Studio Agent]
+        Orch --> Publisher[📅 Publisher Agent]
+    end
 
-## DEVELOPER 1 — Backend Setup (30 min)
+    %% Rendering & Localization
+    subgraph "Real-Time Rendering Muscle"
+        Studio --> Polly[Amazon Polly - Indic Voices]
+        Studio --> Spot[Amazon EC2 Spot Instances / Worker]
+        Spot --> VideoModel[SageMaker / Video Gen Models]
+        Polly --> MediaConvert[AWS Elemental MediaConvert]
+        VideoModel --> MediaConvert
+    end
 
-```bash
-cd backend
+    %% Validation & Delivery
+    MediaConvert -->|Draft Video| Validate[Analyst Agent]
+    Validate -->|Assigns Predicted ERS| UI
+    UI -->|Human Approves| Publish[Publish to Social APIs]
+    Publish -->|New Engagement Data| ERS_Calc
 
-# Virtual environment
-python -m venv venv
-source venv/bin/activate      # Mac/Linux
-# venv\Scripts\activate       # Windows
-
-# Install (includes supabase client now)
-pip install -r requirements.txt
-
-# Configure keys
-cp .env.example .env
-# Edit .env: add GEMINI_API_KEY at minimum
-
-# Start
-python app.py
-```
-
-**Verify:** `curl http://localhost:5000/api/health`
-
-**Seed posts:** `curl -X POST http://localhost:5000/api/seed`
-
----
-
-## DEVELOPER 2 — Frontend Setup (10 min)
-
-```bash
-cd frontend
-npm install
-npm run dev
-# → http://localhost:3000
-```
-
-**TypeScript check:** `npm run typecheck`
-
----
-
-## Supabase Setup (Optional — 15 min)
-
-> Without Supabase, the app still works using in-memory Python dicts.
-> Brand DNA and scheduled posts reset on server restart.
-> **For the demo, local mode is fine.**
-
-### If you want persistence:
-
-1. Go to https://supabase.com → New project (free)
-2. Dashboard → SQL Editor → paste `supabase_schema.sql` → Run
-3. Dashboard → Project Settings → API → copy URL and anon key
-4. Add to `backend/.env`:
-   ```
-   SUPABASE_URL=https://xxxx.supabase.co
-   SUPABASE_ANON_KEY=eyJhbGc...
-   ```
-5. Restart Flask
-
----
-
-## All API Endpoints (v2)
-
-| Method | Endpoint | Module |
-|--------|----------|--------|
-| GET  | `/api/health`          | All |
-| POST | `/api/seed`            | Setup |
-| GET  | `/api/brand-dna`       | Brand DNA |
-| POST | `/api/brand-dna`       | Brand DNA |
-| POST | `/api/ideate`          | Ideation |
-| POST | `/api/studio/generate` | Creative Studio |
-| POST | `/api/analyze`         | Creative Studio |
-| POST | `/api/posts/schedule`  | Calendar |
-| GET  | `/api/posts/calendar`  | Calendar |
-| GET  | `/api/posts/recent`    | Overview |
-| GET  | `/api/posts/stats`     | Overview |
-| GET  | `/api/stats`           | ESG |
-| GET  | `/api/posts`           | Library |
-| POST | `/api/generate`        | Generator |
-
----
-
-## Developer Split — 24-Hour Plan
-
-### Dev 1 (Backend / AI)
-**Hours 1–4:** Setup Flask v2 + seed ChromaDB + test `/api/analyze`
-**Hours 5–8:** Wire up Supabase OR confirm local fallback works
-**Hours 9–12:** Test `/api/ideate` and `/api/studio/generate` end-to-end
-**Hours 12–16:** Test all scheduling endpoints + final integration
-
-### Dev 2 (Frontend / TypeScript)
-**Hours 1–4:** `npm install` + verify App loads + nav works
-**Hours 5–8:** Brand DNA form: save/load with real API
-**Hours 9–12:** Ideation → Studio flow working (idea → generates post → scores)
-**Hours 12–16:** Calendar shows scheduled posts + polish
-
----
-
-## Demo Script (5 minutes)
-
-1. **Overview** → Show stats cards (hardcoded = fine) + "AI Engine Online"
-2. **Brand DNA** → Fill in brand name, mission, 3 tone words, 2 banned words → Save
-3. **Ideation** → Click "Generate 5 Ideas" → Show AI ideas with predicted ERS
-4. **Studio** → Select idea → Generate post → Score it → Show the analysis split screen
-5. **Calendar** → Schedule the post → Show it appearing on the calendar
-
-**The pitch:** "Every other tool just generates content. We score it for emotional resonance against what has actually worked for this brand — before it goes live."
-
----
-
-## Design System
-
-Font pairing: `Playfair Display` (display/editorial) + `IBM Plex Mono` (labels/data) + `Figtree` (body)
-
-Color system:
-- `--teal`    `#00D4B8` — primary actions, scores, online status
-- `--coral`   `#FF5757` — errors, banned words, mismatch
-- `--violet`  `#A78BFA` — tone/creative elements
-- `--amber`   `#F5A623` — warnings, weak scores
-- `--emerald` `#34D399` — success, strong match
