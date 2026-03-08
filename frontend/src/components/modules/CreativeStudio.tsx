@@ -26,6 +26,7 @@ export default function CreativeStudio({ selectedIdea }: Props) {
   const [schedDate, setSchedDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [imageStyle, setImageStyle] = useState("");
 
   // Phase 6: Multi-Modal Media Generation
   const [mediaFormat, setMediaFormat] = useState<MediaFormat>("image");
@@ -57,6 +58,7 @@ export default function CreativeStudio({ selectedIdea }: Props) {
       const post = res.result;
       setGenerated(post);
       setDraft(post.post_text ?? "");
+      setImageStyle(post.image_style_prompt ?? "");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -142,6 +144,7 @@ export default function CreativeStudio({ selectedIdea }: Props) {
         hashtags,
         format: mediaFormat,
         brand_id: "default",
+        image_prompt: imageStyle // Pass the explicitly edited style
       });
 
       setGeneratedMedia(res.result);
@@ -232,45 +235,22 @@ export default function CreativeStudio({ selectedIdea }: Props) {
             </div>
           </div>
 
-          {/* Image Style Prompt */}
+          {/* Image Style Prompt - Now Editable */}
           {generated?.image_style_prompt && (
             <div className="card card-sm" style={{ borderColor: "rgba(167,139,250,0.2)" }}>
               <div className="mono-label" style={{ color: "var(--violet)", marginBottom: 6 }}>
                 🖼 AI Image Style Brief
               </div>
-              <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, fontStyle: "italic" }}>
-                "{generated.image_style_prompt}"
-              </p>
+              <textarea
+                className="textarea"
+                rows={3}
+                style={{ fontSize: 13, background: "rgba(0,0,0,0.2)", borderColor: "rgba(167,139,250,0.1)" }}
+                value={imageStyle}
+                onChange={e => setImageStyle(e.target.value)}
+                placeholder="Describe the image you want to generate..."
+              />
             </div>
           )}
-
-          {/* Schedule */}
-          <div className="card card-sm">
-            <div className="mono-label" style={{ marginBottom: 10 }}>📅 Action</div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
-              <button
-                className="btn btn-primary"
-                onClick={handlePublish}
-                disabled={!draft.trim()}
-                style={{ flex: 1, minWidth: "140px" }}
-              >
-                🚀 Publish Now
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <input className="input" type="datetime-local" style={{ flex: 1, minWidth: "200px" }}
-                value={schedDate}
-                onChange={e => setSchedDate(e.target.value)}
-              />
-              <button className="btn btn-ghost" onClick={handleSchedule}
-                disabled={!draft || !schedDate}>
-                Schedule Later
-              </button>
-            </div>
-            {scheduled && <div className="alert alert-success" style={{ marginTop: 10 }}>
-              ✓ Post added to calendar.
-            </div>}
-          </div>
 
           {/* Phase 6: Multi-Modal Media Generator */}
           <div className="card card-accent-teal">
@@ -415,8 +395,11 @@ export default function CreativeStudio({ selectedIdea }: Props) {
                                   alt={`Slide ${slide.slide_number}`}
                                   style={{
                                     width: "100%",
+                                    aspectRatio: "1/1",
+                                    objectFit: "cover",
                                     borderRadius: 6,
-                                    border: "1px solid var(--border)"
+                                    border: "1px solid var(--border)",
+                                    background: "#000"
                                   }}
                                 />
                               )}
@@ -456,8 +439,11 @@ export default function CreativeStudio({ selectedIdea }: Props) {
                                   alt={`Scene ${scene.scene_number}`}
                                   style={{
                                     width: "100%",
+                                    aspectRatio: "16/9",
+                                    objectFit: "cover",
                                     borderRadius: 6,
-                                    border: "1px solid var(--border)"
+                                    border: "1px solid var(--border)",
+                                    background: "#000"
                                   }}
                                 />
                               )}
@@ -475,6 +461,34 @@ export default function CreativeStudio({ selectedIdea }: Props) {
                 )}
               </div>
             )}
+          </div>
+
+          {/* Schedule */}
+          <div className="card card-sm">
+            <div className="mono-label" style={{ marginBottom: 10 }}>📅 Action</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+              <button
+                className="btn btn-primary"
+                onClick={handlePublish}
+                disabled={!draft.trim()}
+                style={{ flex: 1, minWidth: "140px" }}
+              >
+                🚀 Publish Now
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <input className="input" type="datetime-local" style={{ flex: 1, minWidth: "200px" }}
+                value={schedDate}
+                onChange={e => setSchedDate(e.target.value)}
+              />
+              <button className="btn btn-ghost" onClick={handleSchedule}
+                disabled={!draft || !schedDate}>
+                Schedule Later
+              </button>
+            </div>
+            {scheduled && <div className="alert alert-success" style={{ marginTop: 10 }}>
+              ✓ Post added to calendar.
+            </div>}
           </div>
         </div>
 

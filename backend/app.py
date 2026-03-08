@@ -174,8 +174,8 @@ def call_gemini(prompt: str) -> str:
 def call_groq(prompt: str) -> str:
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    payload = {"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content": prompt}],
-               "temperature": 0.7, "max_tokens": 1024}
+    payload = {"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}],
+               "temperature": 0.7, "max_tokens": 1500}
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=30)
         res.raise_for_status()
@@ -541,7 +541,7 @@ Brand Mission: {mission or "Not defined"}
 Tone: {tone}
 NEVER use these words: {banned}
 
-🏆 PROVEN PATTERNS FROM TOP PERFORMERS:
+🏆 PROVEN PATTERNS FROM TOP PERFORMERS (Use for TONE & STRUCTURE ONLY):
 {posts_context or "No reference posts available."}
 
 {f"Winner Stats: {winner_stats['count']} posts, Avg ERS: {winner_stats['avg_ers']}\n" if winner_stats else ""}
@@ -553,6 +553,11 @@ These are VALIDATED high-performers (top 20% by engagement). Mirror their:
 - Content structure and pacing
 - Call-to-action styles
 - Tone and voice characteristics
+
+CRITICAL RULES:
+1. TOPIC PRESERVATION: The post MUST be strictly about the user's Idea: "{idea}".
+2. DO NOT hallucinate or copy the subject matter, events, or specific stories from the Top Performers (e.g., if a Top Performer is about an intern, do NOT write about an intern unless the user's idea is about an intern).
+3. Use the Top Performers strictly as a template for *HOW* to write, not *WHAT* to write about.
 
 Return ONLY valid JSON:
 {{
@@ -647,6 +652,7 @@ def generate_media():
     format_type = data.get("format", "image")
     brand_id = data.get("brand_id", "default")
     generate_images = data.get("generate_images", True)  # Allow disabling for testing
+    manual_prompt = data.get("image_prompt", "")
     
     # Validation
     if not caption:
@@ -679,6 +685,10 @@ def generate_media():
             format_type=format_type,
             brand_context=brand_context[:500] if brand_context else ""
         )
+        
+        # Override the AI-generated image prompt if the user provided one manually
+        if manual_prompt and format_type == "image":
+            result["image_prompt"] = manual_prompt
         
         print(f"✨ Generated {format_type} prompts")
         
@@ -784,9 +794,17 @@ def analyze_draft():
             pass
     else:
         bw_raw = brand_dna.get("banned_words", "[]")
-        banned_words = json.loads(bw_raw) if isinstance(bw_raw, str) else bw_raw
+        try:
+            banned_words = json.loads(bw_raw) if isinstance(bw_raw, str) else bw_raw
+        except:
+            # Fallback if it's a plain comma-separated string like "low, cheap" instead of JSON '["low", "cheap"]'
+            banned_words = [w.strip() for w in bw_raw.split(",")] if isinstance(bw_raw, str) else bw_raw
 
-    found_banned = [w for w in banned_words if w.lower() in draft.lower()]
+    # Ensure banned_words is actually a list, not just characters of a string
+    if isinstance(banned_words, str):
+        banned_words = [w.strip() for w in banned_words.split(",")]
+
+    found_banned = [w for w in banned_words if w.lower() in draft.lower() and w.strip()]
 
     # ChromaDB semantic search
     emb = embed_text(draft)
@@ -811,11 +829,16 @@ def analyze_draft():
 
     prompt = f"""You are an Emotional Alignment Checker for a brand's social media content.
 
-Brand's top resonating posts:
+Brand's top resonating posts (Use strictly for TONE, PACING, and STYLE matching):
 {posts_fmt}
 
 Draft to analyze: {draft}
 {"⚠️ BANNED WORDS FOUND: " + str(found_banned) if found_banned else ""}
+
+INSTRUCTIONS FOR REWRITE SUGGESTION:
+1. TOPIC PRESERVATION: You MUST maintain the exact original subject matter, meaning, and intent of the Draft.
+2. DO NOT copy the subject matter from the top resonating posts (e.g., if the Draft is about a specific event or topic, do NOT rewrite it to be about the events in the Top Resonating Posts).
+3. Adjust only the TONE, PACING, and EMOTIONAL DELIVERY of the Draft to match the winning posts.
 
 Return ONLY valid JSON:
 {{

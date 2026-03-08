@@ -82,8 +82,8 @@ class AWSImageGenerator:
         self,
         prompt: str,
         negative_prompt: str = "",
-        width: int = 1280,
-        height: int = 720,
+        width: int = 1024,
+        height: int = 1024,
         cfg_scale: float = 8.0,
         seed: Optional[int] = None
     ) -> bytes:
@@ -93,8 +93,8 @@ class AWSImageGenerator:
         Args:
             prompt: Text description of the image
             negative_prompt: What to avoid in the image
-            width: Image width (default 1280 for 16:9)
-            height: Image height (default 720 for 16:9)
+            width: Image width (default 1024 for 1:1)
+            height: Image height (default 1024 for 1:1)
             cfg_scale: How closely to follow the prompt
             seed: Random seed for reproducibility
             
@@ -137,9 +137,48 @@ class AWSImageGenerator:
             error_code = e.response['Error']['Code']
             error_message = e.response['Error']['Message']
             print(f"⚠️ Bedrock error ({error_code}): {error_message}")
-            return self._get_fallback_mock_image()
+            return self._generate_with_dalle_fallback(prompt, width, height)
         except Exception as e:
             print(f"⚠️ Image generation failed: {str(e)}")
+            return self._generate_with_dalle_fallback(prompt, width, height)
+
+    def _generate_with_dalle_fallback(self, prompt: str, width: int, height: int) -> bytes:
+        """Fallback to OpenAI DALL-E 3 if AWS Bedrock fails or lacks permissions"""
+        import os
+        import requests
+        from openai import OpenAI
+        
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if not openai_key:
+            print("⚠️ OPENAI_API_KEY missing - skipping DALL-E 3 fallback")
+            return self._get_fallback_mock_image()
+            
+        print("🔄 Rerouting image generation to OpenAI DALL-E 3 Fallback...")
+        client = OpenAI(api_key=openai_key)
+        
+        # Map dimensions to DALL-E 3 supported aspect ratios
+        dalle_size = "1024x1024"
+        if width > height:
+            dalle_size = "1792x1024" # Landscape
+        elif height > width:
+            dalle_size = "1024x1792" # Portrait
+            
+        try:
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=prompt,
+                size=dalle_size,
+                quality="standard",
+                n=1,
+            )
+            image_url = response.data[0].url
+            
+            # Download binary image data from url
+            img_data = requests.get(image_url, timeout=15).content
+            print("✅ DALL-E 3 generation successful")
+            return img_data
+        except Exception as e:
+            print(f"❌ DALL-E 3 fallback failed: {e}")
             return self._get_fallback_mock_image()
 
     def _get_fallback_mock_image(self) -> bytes:
