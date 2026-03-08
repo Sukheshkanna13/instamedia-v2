@@ -12,14 +12,14 @@ Flow:
 import json
 from services.ad_scraper.ingestion_service import ADIngestionService
 from services.bedrock.bedrock_client import BedrockClient, BedrockInvokeError
-from services.bedrock.gemini_ads_client import GeminiAdsClient
+from services.bedrock.xai_ads_client import XaiAdsClient
 
 
 class ADRecommendationEngine:
     def __init__(self, ingestion_service=None):
         self.ingestion_service = ingestion_service or ADIngestionService()
         self.bedrock = BedrockClient()
-        self.gemini_fallback = GeminiAdsClient()
+        self.xai_fallback = XaiAdsClient()
 
     def generate_ad_recommendations(self, user_input: dict) -> dict:
         """
@@ -60,23 +60,23 @@ class ADRecommendationEngine:
         # Step 4: Build full RAG prompt
         prompt = self._build_rag_prompt(user_input, context_block)
 
-        # Step 5: Call Bedrock, fallback to Gemini Native on error (e.g., 400 Model Access Denied)
+        # Step 5: Call Bedrock, fallback to xAI API on error (e.g., 400 Model Access Denied)
         try:
             recommendations = self.bedrock.invoke_json(prompt, max_tokens=2000)
         except BedrockInvokeError as e:
-            print(f"⚠️ Bedrock invocation failed ({e}). Triggering Gemini API Fallback for ADs...")
+            print(f"⚠️ Bedrock invocation failed ({e}). Triggering xAI API Fallback for ADs...")
             try:
-                recommendations = self.gemini_fallback.invoke_json(prompt, max_tokens=2000)
-                # Catch partial parse errors from Free Tier limits
+                recommendations = self.xai_fallback.invoke_json(prompt, max_tokens=2000)
+                # Catch partial parse errors
                 if isinstance(recommendations, dict) and 'error' in recommendations and 'JSON parse failed' in recommendations['error']:
-                    print("⚠️ Gemini returned malformed JSON or partial response due to limits. Using High-Quality Mock Data.")
+                    print("⚠️ xAI returned malformed JSON or partial response. Using High-Quality Mock Data.")
                     recommendations = self._get_mock_recommendations(user_input)
             except Exception as inner_e:
-                if '429' in str(inner_e) or 'RESOURCE_EXHAUSTED' in str(inner_e):
-                    print("⚠️ Gemini Free Tier Quota Exceeded (429). Using High-Quality Mock Data for Demo.")
+                if '429' in str(inner_e) or 'RESOURCE_EXHAUSTED' in str(inner_e) or '403' in str(inner_e):
+                    print(f"⚠️ xAI Credits Empty or Quota Exceeded (403/429). Using High-Quality Mock Data for Demo.")
                     recommendations = self._get_mock_recommendations(user_input)
                 else:
-                    recommendations = {"error": f"Both Bedrock and Gemini fallback failed: {str(inner_e)}"}
+                    recommendations = {"error": f"Both Bedrock and xAI fallback failed: {str(inner_e)}"}
         except Exception as e:
             recommendations = {"error": f"Failed to generate recommendations: {str(e)}"}
 

@@ -17,15 +17,15 @@ Agents:
 import time
 from typing import Dict
 from services.bedrock.bedrock_client import BedrockClient, BedrockInvokeError
-from services.bedrock.gemini_ads_client import GeminiAdsClient
+from services.bedrock.xai_ads_client import XaiAdsClient
 
 
 class MarketingIntelligenceService:
     def __init__(self):
         # We only need 1 client now since we run synchronously
         self.master_client = BedrockClient()
-        # Gemini Native Fallback client for ADs
-        self.master_gemini = GeminiAdsClient()
+        # xAI Grok Native Fallback client for ADs
+        self.master_xai = XaiAdsClient()
 
     def get_full_intelligence(self, request: Dict) -> Dict:
         """
@@ -125,11 +125,11 @@ Return ONLY valid JSON (no markdown fences) covering ALL THREE reports in this e
         try:
             return self.master_client.invoke_json(prompt, max_tokens=3000)
         except BedrockInvokeError as e:
-            print(f"⚠️ [Total Intelligence] Bedrock failed: {e}. Falling back to Gemini Free Tier (Synchronous)...")
+            print(f"⚠️ [Total Intelligence] Bedrock failed: {e}. Falling back to xAI Free Tier (Synchronous)...")
             try:
-                return self.master_gemini.invoke_json(prompt, max_tokens=3000)
+                return self.master_xai.invoke_json(prompt, max_tokens=3000)
             except Exception as inner_e:
-                err_dict = {"error": f"Both Bedrock and Gemini failed: {str(inner_e)}"}
+                err_dict = {"error": f"Both Bedrock and xAI failed: {str(inner_e)}"}
                 return {
                     "market_research": err_dict,
                     "campaign_tuning": err_dict,

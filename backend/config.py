@@ -16,8 +16,8 @@ class Config:
     BEDROCK_REGION    = os.getenv("BEDROCK_REGION", "us-east-1")
     BEDROCK_MODEL_ID  = os.getenv("BEDROCK_LLM_MODEL_ID", "deepseek.v3.2")
     
-    # ── Google Gemini API (Fallback for Bedrock ADs) ───────────────────────
-    GEMINI_ADS_API_KEY = os.getenv("GEMINI_ADS_API_KEY")
+    # ── xAI Grok API (Fallback for Bedrock ADs) ───────────────────────
+    XAI_ADS_API_KEY = os.getenv("XAI_ADS_API_KEY")
 
     # ── ChromaDB (local vector store) ────────────────────────────────
     CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_ads_db")

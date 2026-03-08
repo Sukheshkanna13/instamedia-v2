@@ -65,7 +65,7 @@ Response JSON:
         "platform": "META",
         "preview_url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71",
         "run_days": 45,
-        "scraped_at": "2026-03-08T05:03:14.364564",
+        "scraped_at": "2026-03-08T05:11:01.064421",
         "similarity_score": 0.9,
         "spend_lower": 500
       },
@@ -80,7 +80,7 @@ Response JSON:
         "platform": "META",
         "preview_url": "https://images.unsplash.com/photo-1460925895917-afdab827c52f",
         "run_days": 21,
-        "scraped_at": "2026-03-08T05:03:14.364577",
+        "scraped_at": "2026-03-08T05:11:01.064435",
         "similarity_score": 0.9,
         "spend_lower": 400
       },
@@ -95,7 +95,7 @@ Response JSON:
         "platform": "YOUTUBE",
         "preview_url": "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0",
         "run_days": 0,
-        "scraped_at": "2026-03-08T05:03:14.663080",
+        "scraped_at": "2026-03-08T05:11:01.334185",
         "similarity_score": 0.9,
         "video_url": "https://www.youtube.com/watch?v=mock123",
         "views": 2500000
@@ -111,7 +111,7 @@ Response JSON:
         "platform": "YOUTUBE",
         "preview_url": "https://images.unsplash.com/photo-1533750516457-a7f992034fec",
         "run_days": 0,
-        "scraped_at": "2026-03-08T05:03:14.663113",
+        "scraped_at": "2026-03-08T05:11:01.334211",
         "similarity_score": 0.9,
         "video_url": "https://www.youtube.com/watch?v=mock456",
         "views": 850000
