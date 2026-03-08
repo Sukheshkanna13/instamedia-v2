@@ -1,13 +1,13 @@
 # 🚀 InstaMedia AI: The Multi-Agent Emotional Signal Engine
 
-**AWS AI for Bharat Hackathon Submission** | [cite_start]**Team Name:** newGPT [cite: 6] | [cite_start]**Team Leader:** Sukhesh kanna Saravanan [cite: 7]
+**AWS AI for Bharat Hackathon Submission** | **Team Name:** newGPT | **Team Leader:** Sukhesh kanna Saravanan 
 <img width="1470" height="729" alt="Screenshot 2026-03-08 at 11 42 05 PM" src="https://github.com/user-attachments/assets/346df0c1-d39c-43ce-a002-2fc304c60c27" />
 
 
 
-[cite_start]Generative AI has completely solved content production speed, but it broke something much more important: **Emotional Connection**[cite: 15]. [cite_start]Currently, 68% of consumers report that AI-generated content feels hollow, leading to a massive drop in trust and engagement[cite: 21, 24, 25]. Furthermore, traditional emotionally-engaging video shoots remain completely unaffordable for local Indian MSMEs. 
+Generative AI has completely solved content production speed, but it broke something much more important: **Emotional Connection**. Currently, 68% of consumers report that AI-generated content feels hollow, leading to a massive drop in trust and engagement. Furthermore, traditional emotionally-engaging video shoots remain completely unaffordable for local Indian MSMEs. 
 
-[cite_start]**InstaMedia AI** bridges this **Resonance Gap**[cite: 14]. [cite_start]It is not just an AI generator; it is an autonomous digital marketing agency built on a serverless AWS pipeline[cite: 39, 40].
+**InstaMedia AI** bridges this **Resonance Gap** It is not just an AI generator; it is an autonomous digital marketing agency built on a serverless AWS pipeline.
 
 <img width="875" height="475" alt="Screenshot 2026-03-09 at 1 40 56 AM" src="https://github.com/user-attachments/assets/19e145ce-d759-4b74-b017-dddfe79206ad" />
 
