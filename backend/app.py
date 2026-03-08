@@ -28,6 +28,9 @@ load_dotenv(override=True)
 app = Flask(__name__)
 CORS(app)
 
+from routes.ads_intelligence import ads_bp
+app.register_blueprint(ads_bp)
+
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY   = os.getenv("GEMINI_API_KEY",   "")
@@ -652,12 +655,19 @@ def generate_media():
     if format_type not in ["image", "carousel", "video"]:
         return jsonify({"success": False, "error": f"Invalid format: {format_type}"}), 400
     
-    # Get brand context for better prompts
+    # Get brand context and logo for better prompts and watermarking
     brand_context = ""
+    brand_logo_url = None
     try:
         brand_context = get_brand_context(brand_id, caption, collection)
+        
+        # Extact logo URL for overlay pipeline
+        brand_data = supabase.table("brand_dna").select("logo_url").eq("brand_id", brand_id).execute()
+        if brand_data.data and len(brand_data.data) > 0:
+            brand_logo_url = brand_data.data[0].get("logo_url")
+            
     except Exception as e:
-        print(f"⚠️  Could not fetch brand context: {e}")
+        print(f"⚠️  Could not fetch brand context/logo: {e}")
     
     # Step 1: Generate creative prompts (Translation Layer)
     media_gen = create_media_generator(call_llm)
@@ -684,7 +694,10 @@ def generate_media():
                         # Single image generation
                         prompt = result.get("image_prompt", "")
                         if prompt:
-                            image_result = aws_gen.generate_and_upload(prompt)
+                            image_result = aws_gen.generate_and_upload(
+                                prompt=prompt, 
+                                brand_logo_url=brand_logo_url
+                            )
                             result["image_url"] = image_result["url"]
                             print(f"✅ Generated image in {image_result['generation_time_seconds']}s")
                     
@@ -692,7 +705,10 @@ def generate_media():
                         # Carousel images (concurrent generation)
                         slides = result.get("slides", [])
                         if slides:
-                            image_results = aws_gen.generate_carousel_images(slides)
+                            image_results = aws_gen.generate_carousel_images(
+                                slides, 
+                                brand_logo_url=brand_logo_url
+                            )
                             # Add URLs to slides
                             for slide, img_result in zip(slides, image_results):
                                 slide["image_url"] = img_result.get("url")
@@ -702,7 +718,10 @@ def generate_media():
                         # Video storyboard keyframes (concurrent generation)
                         storyboard = result.get("storyboard", [])
                         if storyboard:
-                            image_results = aws_gen.generate_storyboard_keyframes(storyboard)
+                            image_results = aws_gen.generate_storyboard_keyframes(
+                                storyboard, 
+                                brand_logo_url=brand_logo_url
+                            )
                             # Add URLs to scenes
                             for scene, img_result in zip(storyboard, image_results):
                                 scene["image_url"] = img_result.get("url")
@@ -1508,4 +1527,4 @@ if __name__ == "__main__":
     
     print(f"\n🚀 InstaMedia AI v2 Backend")
     print(f"   LLM: {LLM_PROVIDER} | ChromaDB: {collection.count()} posts | Supabase: {supabase is not None}\n")
-    app.run(debug=True, port=8000)
+    app.run(debug=True, port=int(os.environ.get("PORT", 5001)), use_reloader=False)

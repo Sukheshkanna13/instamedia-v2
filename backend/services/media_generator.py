@@ -90,11 +90,13 @@ Create a detailed image prompt that captures the essence of this caption. The pr
 - Professional and engaging
 - Suitable for social media (Instagram/LinkedIn)
 - 1-2 sentences maximum
+- CRITICAL: The prompt MUST explicitly ask for "negative space" or "clean areas" (especially near the bottom-right or edges) specifically intended for text overlays and brand logo placement.
+- CRITICAL: Strongly enforce and mention the specific brand hex colors and visual guidelines provided in the BRAND CONTEXT.
 
 Return ONLY a JSON object with this structure:
 {{
     "format": "image",
-    "image_prompt": "detailed visual description here",
+    "image_prompt": "detailed visual description here, including instructions for negative space and brand colors",
     "style": "photography style (e.g., 'modern minimalist', 'vibrant editorial', 'cinematic')",
     "mood": "emotional tone (e.g., 'inspiring', 'professional', 'energetic')"
 }}

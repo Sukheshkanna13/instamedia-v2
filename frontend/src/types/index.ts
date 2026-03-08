@@ -182,10 +182,59 @@ export interface AsyncState<T> {
   error: string | null;
 }
 
-export type Tab = "overview" | "dna" | "ideation" | "studio" | "calendar" | "library" | "connections" | "database" | "drift" | "coldstart" | "analytics";
+export type Tab = "overview" | "dna" | "ideation" | "studio" | "calendar" | "library" | "connections" | "database" | "drift" | "coldstart" | "analytics" | "ads_manager";
 
 export interface NavItem {
   id: Tab;
   label: string;
   icon: string;
+}
+
+// ─── ADs Intelligence ─────────────────────────────────────────────────────────
+
+export interface AdScraperResult {
+  platform: string;
+  ad_id: string;
+  headline: string;
+  body: string;
+  page_name?: string;
+  channel_name?: string;
+  preview_url: string;
+  video_url?: string;
+  impressions_lower?: number;
+  spend_lower?: number;
+  views?: number;
+  efficiency_score: number;
+  niche: string;
+  similarity_score?: number;
+}
+
+export interface CampaignRecommendations {
+  headlines?: string[];
+  body_copies?: { short?: string; medium?: string; long?: string };
+  hooks?: string[];
+  ctas?: string[];
+  creative_direction?: { visuals?: string; colors?: string; formats?: string; inspiration_from_top_ads?: string };
+  targeting_suggestions?: { interests?: string[]; behaviors?: string[]; demographics?: string; lookalike_seed?: string };
+  budget_allocation?: { META?: string; YOUTUBE?: string; rationale?: string };
+  error?: string;
+}
+
+export interface AdRecommendationResponse {
+  brief_used?: string;
+  recommendations?: CampaignRecommendations;
+  retrieved_ads?: AdScraperResult[];
+  error?: string;
+}
+
+export interface MarketingIntelligenceResponse {
+  market_research?: any;
+  campaign_tuning?: any;
+  analytics_insights?: any;
+}
+
+export interface FullCampaignResponse {
+  scrape_summary?: any;
+  ad_recommendations?: AdRecommendationResponse;
+  marketing_intelligence?: MarketingIntelligenceResponse;
 }

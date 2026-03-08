@@ -10,6 +10,7 @@ import BrandDrift from "./components/modules/BrandDrift";
 import ColdStart from "./components/modules/ColdStart";
 import DatabaseExpansion from "./components/modules/DatabaseExpansion";
 import Analytics from "./components/modules/Analytics";
+import AdsManagerModal from "./components/modules/AdsManagerModal";
 // ── Sidebar nav config ────────────────────────────────────────────────────────
 const NAV = [
   {
@@ -40,6 +41,7 @@ const NAV = [
       { id: "database" as Tab, label: "Database", icon: "🗄️" },
       { id: "drift" as Tab, label: "Brand Drift", icon: "📊" },
       { id: "coldstart" as Tab, label: "Cold Start", icon: "🎯" },
+      { id: "ads_manager" as Tab, label: "ADs Manager", icon: "⚡" },
     ]
   }
 ];
@@ -56,11 +58,13 @@ const PAGE_TITLE: Record<Tab, string> = {
   drift: "Brand Drift Detection",
   coldstart: "Cold Start Bootstrap",
   analytics: "Analytics Dashboard",
+  ads_manager: "ADs Manager",
 };
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("overview");
   const [selectedIdea, setSelectedIdea] = useState<ContentIdea | null>(null);
+  const [isAdsManagerOpen, setIsAdsManagerOpen] = useState(false);
 
   // When user picks an idea in Ideation, carry it to Studio
   const handleIdeaSelect = (idea: ContentIdea) => {
@@ -108,7 +112,13 @@ export default function App() {
                 <button
                   key={item.id}
                   className={`nav-item ${tab === item.id ? "active" : ""}`}
-                  onClick={() => setTab(item.id)}
+                  onClick={() => {
+                    if (item.id === "ads_manager") {
+                      setIsAdsManagerOpen(true);
+                    } else {
+                      setTab(item.id);
+                    }
+                  }}
                 >
                   <span className="nav-icon">{item.icon}</span>
                   {item.label}
@@ -159,6 +169,10 @@ export default function App() {
         {/* Page content */}
         {renderPage()}
       </div>
+
+      {isAdsManagerOpen && (
+        <AdsManagerModal onClose={() => setIsAdsManagerOpen(false)} />
+      )}
     </div>
   );
 }
