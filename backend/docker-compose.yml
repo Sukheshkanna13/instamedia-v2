@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: instamedia_flask
+    restart: always
+    ports:
+      - "5001:5001"
+    volumes:
+      # Mount the persistent EBS volume data into the container
+      - ./chroma_data:/app/chromadb
+      - ./brand_images:/app/assets
+    env_file:
+      - .env.production
+    # Exposing internal port to Nginx
+    expose:
+      - "5001"
+
+  nginx:
+    image: nginx:alpine
+    container_name: instamedia_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Nginx config
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Let's encrypt certificates (mapped from EC2 host)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - backend
