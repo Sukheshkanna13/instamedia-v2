@@ -1,0 +1,16 @@
+# Local development Docker Compose — no Nginx, no SSL, uses .env directly
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: instamedia_flask
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./chroma_data:/app/chromadb
+      - ./brand_images:/app/assets
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=development
