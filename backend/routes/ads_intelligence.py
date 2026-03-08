@@ -79,16 +79,12 @@ def full_campaign_pipeline():
         platforms=data.get("platforms", ["META", "YOUTUBE"])
     )
     
-    # We only call ONE generation pipeline to preserve the 15 Req/Min & 20 Req/Day limits.
-    # The frontend will display this data gracefully.
+    # Execute both the Recommendation Pipeline and the Marketing Intelligence Pipeline
     recommendations = recommendation_engine.generate_ad_recommendations(data)
+    intelligence_data = intelligence_service.get_full_intelligence(data)
 
     return jsonify({
         "scrape_summary":         scrape_result,
         "ad_recommendations":     recommendations,
-        "marketing_intelligence": {
-            "analytics_insights": {"error": "Skipped to preserve Free Tier API quotas."},
-            "campaign_tuning": {"error": "Skipped to preserve Free Tier API quotas."},
-            "market_research": {"error": "Skipped to preserve Free Tier API quotas."}
-        }
+        "marketing_intelligence": intelligence_data
     })

@@ -271,7 +271,7 @@ export default function AdsManagerModal({ onClose }: Props) {
                         ADs Intelligence Manager
                         <div className="status-pill" style={{ marginLeft: '12px' }}>
                             <div className="status-dot" style={{ background: 'var(--emerald)' }} />
-                            <span>DeepSeek R1 Online</span>
+                            <span>Groq Llama 3.3 Online</span>
                         </div>
                     </div>
                     <button className="ads-modal-close" onClick={onClose}>&times;</button>
@@ -324,7 +324,7 @@ export default function AdsManagerModal({ onClose }: Props) {
                             {isGenerating ? "⚡ Generating Intelligence..." : "▶ Run full pipeline"}
                         </button>
                         <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', margin: 0 }}>
-                            {isGenerating ? "Scraping UI & calling 4 LLM agents..." : "Powered by DeepSeek & Amazon Bedrock"}
+                            {isGenerating ? "Processing via Groq..." : "Powered by Groq API"}
                         </p>
                     </aside>
 
@@ -347,7 +347,7 @@ export default function AdsManagerModal({ onClose }: Props) {
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
                                     <div className="spinner" style={{ marginBottom: '16px' }}></div>
                                     <p>Scraping realtime META & YouTube Ads...</p>
-                                    <p style={{ fontSize: '12px' }}>Running DeepSeek Agentic Workflows...</p>
+                                    <p style={{ fontSize: '12px' }}>Running Groq Llama Workflows...</p>
                                 </div>
                             ) : !response ? (
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>

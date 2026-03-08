@@ -19,5 +19,8 @@ class Config:
     # ── xAI Grok API (Fallback for Bedrock ADs) ───────────────────────
     XAI_ADS_API_KEY = os.getenv("XAI_ADS_API_KEY")
 
+    # ── Groq API (Fallback for Bedrock ADs) ───────────────────────────
+    GROQ_ADS_API_KEY = os.getenv("GROQ_ADS_API_KEY")
+
     # ── ChromaDB (local vector store) ────────────────────────────────
     CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_ads_db")

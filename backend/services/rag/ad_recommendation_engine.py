@@ -12,14 +12,13 @@ Flow:
 import json
 from services.ad_scraper.ingestion_service import ADIngestionService
 from services.bedrock.bedrock_client import BedrockClient, BedrockInvokeError
-from services.bedrock.xai_ads_client import XaiAdsClient
+from services.bedrock.groq_ads_client import GroqAdsClient
 
 
 class ADRecommendationEngine:
     def __init__(self, ingestion_service=None):
         self.ingestion_service = ingestion_service or ADIngestionService()
-        self.bedrock = BedrockClient()
-        self.xai_fallback = XaiAdsClient()
+        self.groq_client = GroqAdsClient()
 
     def generate_ad_recommendations(self, user_input: dict) -> dict:
         """
@@ -60,25 +59,21 @@ class ADRecommendationEngine:
         # Step 4: Build full RAG prompt
         prompt = self._build_rag_prompt(user_input, context_block)
 
-        # Step 5: Call Bedrock, fallback to xAI API on error (e.g., 400 Model Access Denied)
+        # Step 5: Call Groq API strictly 
         try:
-            recommendations = self.bedrock.invoke_json(prompt, max_tokens=2000)
-        except BedrockInvokeError as e:
-            print(f"⚠️ Bedrock invocation failed ({e}). Triggering xAI API Fallback for ADs...")
-            try:
-                recommendations = self.xai_fallback.invoke_json(prompt, max_tokens=2000)
-                # Catch partial parse errors
-                if isinstance(recommendations, dict) and 'error' in recommendations and 'JSON parse failed' in recommendations['error']:
-                    print("⚠️ xAI returned malformed JSON or partial response. Using High-Quality Mock Data.")
-                    recommendations = self._get_mock_recommendations(user_input)
-            except Exception as inner_e:
-                if '429' in str(inner_e) or 'RESOURCE_EXHAUSTED' in str(inner_e) or '403' in str(inner_e):
-                    print(f"⚠️ xAI Credits Empty or Quota Exceeded (403/429). Using High-Quality Mock Data for Demo.")
-                    recommendations = self._get_mock_recommendations(user_input)
-                else:
-                    recommendations = {"error": f"Both Bedrock and xAI fallback failed: {str(inner_e)}"}
-        except Exception as e:
-            recommendations = {"error": f"Failed to generate recommendations: {str(e)}"}
+            recommendations = self.groq_client.invoke_json(prompt, max_tokens=2000)
+            
+            # Catch partial parse errors
+            if isinstance(recommendations, dict) and 'error' in recommendations and 'JSON parse failed' in recommendations['error']:
+                print("⚠️ Groq returned malformed JSON or partial response. Using High-Quality Mock Data.")
+                recommendations = self._get_mock_recommendations(user_input)
+                
+        except Exception as inner_e:
+            if '429' in str(inner_e) or 'RESOURCE_EXHAUSTED' in str(inner_e) or '403' in str(inner_e):
+                print(f"⚠️ Groq Credits Empty or Quota Exceeded (403/429). Using High-Quality Mock Data for Demo.")
+                recommendations = self._get_mock_recommendations(user_input)
+            else:
+                recommendations = {"error": f"Groq primary engine failed: {str(inner_e)}"}
 
         return {
             "recommendations": recommendations,

@@ -6,51 +6,53 @@ Response JSON:
     "brief_used": "Campaign for fitness supplements targeting men 25-40 interested in gym and fitness. Goal: drive product page visits. Tone: energetic and motivational.",
     "recommendations": {
       "body_copies": {
-        "long": "In the competitive world of health & wellness, mediocre ads mean wasted budget. We analyzed thousands of campaigns related to fitness supplements and found a recurring pattern among the top 1% performers. By shifting focus to emotional hooks and dialing in your exact audience demographics, you can see an immediate drop in acquisition costs. Read the full playbook below and start scaling with confidence today.",
-        "medium": "Are your health & wellness campaigns struggling? It's time to rethink your approach to fitness supplements. Our data-driven intelligence reveals the exact optimizations you need to lower CPC and skyrocket your ROAS. Don't leave money on the table.",
-        "short": "Discover the proven fitness supplements strategy that top brands in health & wellness use to scale predictably. Click to learn more."
+        "long": "Are you tired of feeling stuck in your fitness journey? Our supplements are specifically formulated to help you break through plateaus and achieve the results you've always wanted. With our expert guidance and support, you can unlock your full potential and start seeing real progress.",
+        "medium": "Take your fitness journey to the next level with our high-quality supplements, designed to help you achieve your goals faster and more efficiently.",
+        "short": "Get fit, feel great! Discover the secret to unlocking your full potential with our expert-approved fitness supplements."
       },
       "budget_allocation": {
-        "META": "65%",
-        "YOUTUBE": "35%",
-        "rationale": "Meta drives lower-funnel direct response volume, while YouTube serves as a high-intent discovery engine for detailed product education."
+        "META": "60% ($300)",
+        "YOUTUBE": "40% ($200)",
+        "rationale": "META offers a wider reach and more precise targeting options, while YOUTUBE provides an opportunity to showcase the product in a more immersive and engaging way."
       },
       "creative_direction": {
-        "colors": "Primary brand colors with neon accents (e.g., lime green or electric blue) to disrupt scroll patterns.",
-        "formats": "9:16 vertical videos for Reels/Shorts, and high-saturation 4:5 image carousels for feed.",
-        "inspiration_from_top_ads": "Fast-paced editing, text overlays within the first 3 seconds, and a strong authoritative voiceover.",
-        "visuals": "High-contrast dynamic shots showing real user generated content (UGC) reacting to the results."
+        "colors": "Primary color: energetic orange, Secondary color: deep blue, Accent color: bright green",
+        "formats": "Image, video, and carousel ads to showcase different aspects of the product and appeal to various learning styles",
+        "inspiration_from_top_ads": "AD #1 and AD #2, with a focus on bold headlines, concise body copy, and clear calls-to-action",
+        "visuals": "High-energy fitness imagery, bold typography, and vibrant colors to evoke a sense of motivation and excitement"
       },
       "ctas": [
-        "Get the Free Playbook",
-        "See the Data",
-        "Start Scaling Today"
+        "Shop Now and Start Your Fitness Journey",
+        "Learn More About Our Proven Supplements",
+        "Get Started with Our Expert-Approved Fitness Plan"
       ],
       "headlines": [
-        "Unlock 10x ROI with fitness supplements",
-        "The undisputed champion of health & wellness",
-        "Stop losing money: The exact fitness supplements strategy you need"
+        "Unlock Your Fitness Potential with Proven Supplements",
+        "Transform Your Body with the Right Fitness Supplements",
+        "Maximize Your Workout with the Best Fitness Supplements"
       ],
       "hooks": [
-        "Why 90% of fitness supplements ads fail...",
-        "Watch this before your next campaign launch.",
-        "The 1 secret health & wellness experts don't want you to know.",
-        "Are you making this critical targeting mistake?",
-        "How we scaled a fitness supplements brand with this one simple tweak."
+        "Get ready to transform your body",
+        "Unlock the secret to fitness success",
+        "Maximize your workout with the best supplements",
+        "Say goodbye to fitness plateaus",
+        "Start seeing real results with our expert-approved supplements"
       ],
       "targeting_suggestions": {
         "behaviors": [
-          "Recent online purchasers",
-          "Engaged shoppers",
-          "Early adopters"
+          "frequent gym-goers",
+          "health-conscious individuals",
+          "fitness enthusiasts"
         ],
-        "demographics": "Ages 25-45, top 25% household income, primarily urban/suburban locations.",
+        "demographics": "Men aged 25-40",
         "interests": [
-          "health & wellness publications",
-          "Competitor brand followers",
-          "High-intent buyer keywords"
+          "fitness",
+          "gym",
+          "workout",
+          "health",
+          "wellness"
         ],
-        "lookalike_seed": "Past purchasers with LTV > $500 or top 10% highly engaged email subscribers."
+        "lookalike_seed": "Existing customers and followers of fitness influencers"
       }
     },
     "retrieved_ads": [
@@ -65,7 +67,7 @@ Response JSON:
         "platform": "META",
         "preview_url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71",
         "run_days": 45,
-        "scraped_at": "2026-03-08T05:11:01.064421",
+        "scraped_at": "2026-03-08T05:26:43.782664",
         "similarity_score": 0.9,
         "spend_lower": 500
       },
@@ -80,7 +82,7 @@ Response JSON:
         "platform": "META",
         "preview_url": "https://images.unsplash.com/photo-1460925895917-afdab827c52f",
         "run_days": 21,
-        "scraped_at": "2026-03-08T05:11:01.064435",
+        "scraped_at": "2026-03-08T05:26:43.782679",
         "similarity_score": 0.9,
         "spend_lower": 400
       },
@@ -95,7 +97,7 @@ Response JSON:
         "platform": "YOUTUBE",
         "preview_url": "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0",
         "run_days": 0,
-        "scraped_at": "2026-03-08T05:11:01.334185",
+        "scraped_at": "2026-03-08T05:26:44.419834",
         "similarity_score": 0.9,
         "video_url": "https://www.youtube.com/watch?v=mock123",
         "views": 2500000
@@ -111,7 +113,7 @@ Response JSON:
         "platform": "YOUTUBE",
         "preview_url": "https://images.unsplash.com/photo-1533750516457-a7f992034fec",
         "run_days": 0,
-        "scraped_at": "2026-03-08T05:11:01.334211",
+        "scraped_at": "2026-03-08T05:26:44.419858",
         "similarity_score": 0.9,
         "video_url": "https://www.youtube.com/watch?v=mock456",
         "views": 850000

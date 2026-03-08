@@ -17,15 +17,13 @@ Agents:
 import time
 from typing import Dict
 from services.bedrock.bedrock_client import BedrockClient, BedrockInvokeError
-from services.bedrock.xai_ads_client import XaiAdsClient
+from services.bedrock.groq_ads_client import GroqAdsClient
 
 
 class MarketingIntelligenceService:
     def __init__(self):
         # We only need 1 client now since we run synchronously
-        self.master_client = BedrockClient()
-        # xAI Grok Native Fallback client for ADs
-        self.master_xai = XaiAdsClient()
+        self.master_groq = GroqAdsClient()
 
     def get_full_intelligence(self, request: Dict) -> Dict:
         """
@@ -123,19 +121,14 @@ Return ONLY valid JSON (no markdown fences) covering ALL THREE reports in this e
 }}"""
         
         try:
-            return self.master_client.invoke_json(prompt, max_tokens=3000)
-        except BedrockInvokeError as e:
-            print(f"⚠️ [Total Intelligence] Bedrock failed: {e}. Falling back to xAI Free Tier (Synchronous)...")
-            try:
-                return self.master_xai.invoke_json(prompt, max_tokens=3000)
-            except Exception as inner_e:
-                err_dict = {"error": f"Both Bedrock and xAI failed: {str(inner_e)}"}
-                return {
-                    "market_research": err_dict,
-                    "campaign_tuning": err_dict,
-                    "analytics_insights": err_dict
-                }
-        except Exception as e:
+            return self.master_groq.invoke_json(prompt, max_tokens=3000)
+        except Exception as inner_e:
+            err_dict = {"error": f"Groq primary failed: {str(inner_e)}"}
+            return {
+                "market_research": err_dict,
+                "campaign_tuning": err_dict,
+                "analytics_insights": err_dict
+            }
             err_dict = {"error": str(e)}
             return {
                 "market_research": err_dict,

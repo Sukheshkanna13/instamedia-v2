@@ -25,6 +25,7 @@ const NAV = [
       { id: "dna" as Tab, label: "Brand DNA Vault", icon: "🧬" },
       { id: "ideation" as Tab, label: "Ideation", icon: "✦" },
       { id: "studio" as Tab, label: "Creative Studio", icon: "⚡" },
+      { id: "ads_manager" as Tab, label: "ADs Manager", icon: "🎯" },
     ]
   },
   {
@@ -41,7 +42,6 @@ const NAV = [
       { id: "database" as Tab, label: "Database", icon: "🗄️" },
       { id: "drift" as Tab, label: "Brand Drift", icon: "📊" },
       { id: "coldstart" as Tab, label: "Cold Start", icon: "🎯" },
-      { id: "ads_manager" as Tab, label: "ADs Manager", icon: "⚡" },
     ]
   }
 ];
