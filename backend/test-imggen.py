@@ -3,7 +3,7 @@ from openai import OpenAI
 import requests
 
 # User provided API key
-OPENAI_API_KEY = "API KEY HERE"
+OPENAI_API_KEY = ""
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 

@@ -1028,3 +1028,5 @@ consistent, parseable JSON. `invoke()` uses 0.7 for more creative text like head
 *Instamedia AI — ADs Intelligence Module v2*
 *Stack: Flask + ChromaDB + SerpAPI + META Ad Library + Amazon Bedrock (API Key Auth)*
 *Auth method: Bearer token via HTTP Authorization header — NO boto3 required*
+
+
