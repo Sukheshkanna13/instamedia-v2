@@ -8,7 +8,7 @@ frontend:
         - npm ci
     build:
       commands:
-        - echo "VITE_API_URL=https://api.instamedia.ai" > .env.production
+        - echo "VITE_API_URL=https://areolar-shantay-mercenarily.ngrok-free.dev" > .env.production
         - echo "VITE_ENVIRONMENT=production" >> .env.production
         - echo "Building Vite React SPA for production..."
         - npm run build
